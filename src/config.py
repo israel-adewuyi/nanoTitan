@@ -8,20 +8,12 @@ from pydantic import (
     ConfigDict,
     Field,
     PositiveInt,
-    field_validator,
     model_validator,
 )
 
 
 class TokenEmbeddingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-    @field_validator("scale")
-    @classmethod
-    def validate_scale(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError("token_embedding.scale must be greater than 0")
-        return value
 
 
 class PositionalEmbeddingConfig(BaseModel):
@@ -44,17 +36,23 @@ class ModelConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_embedding_compatibility(self) -> ModelConfig:
-        if self.positional_embedding.kind == "sinusoidal" and self.d_model % 2 != 0:
+        if self.d_model % 2 != 0:
             raise ValueError(
                 "model.d_model must be even when using sinusoidal positional embeddings"
             )
         return self
 
 
+class DeviceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    device_id: List
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model: ModelConfig
+    device_id: DeviceConfig
 
 
 def resolve_config_path(path: str | Path) -> Path:

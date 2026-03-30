@@ -110,7 +110,7 @@ class NanoTitanModel(nn.Module):
         self.cfg = cfg
         self.token_embed = TokenEmbed(cfg)
         self.position_embed = PositionEmbed(cfg)
-        self.layers = nn.ModuleList(MultiHeadAttention(cfg) for _ in cfg.n_layers)
+        self.layers = nn.ModuleList(MultiHeadAttention(cfg) for _ in range(cfg.n_layers))
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
         token_emb = self.token_embed(input_ids)
