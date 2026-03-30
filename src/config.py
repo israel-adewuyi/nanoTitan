@@ -30,6 +30,7 @@ class ModelConfig(BaseModel):
     n_heads: PositiveInt
     n_layers: PositiveInt
     max_seq_len: PositiveInt
+    ffn_in: PositiveInt
     token_embedding: TokenEmbeddingConfig = Field(default_factory=TokenEmbeddingConfig)
     positional_embedding: PositionalEmbeddingConfig = Field(
         default_factory=PositionalEmbeddingConfig

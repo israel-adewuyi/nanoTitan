@@ -45,7 +45,7 @@ class PositionEmbed(nn.Module):
             raise ValueError(
                 f"Sequence length {seq_len} exceeds configured max_seq_len={self.max_seq_len}"
             )
-        return x + self.pos_embed[:seq_len].unsqueeze(0)
+        return self.pos_embed[:seq_len].unsqueeze(0)
 
 
 class MultiHeadAttention(nn.Module):
@@ -104,17 +104,53 @@ class MultiHeadAttention(nn.Module):
         return out
 
 
+class FFN(nn.Module):
+    """Feedforward network implementation"""
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.cfg = cfg
+
+        self.W_in = nn.Linear(cfg.d_model, cfg.ffn_in)
+        self.W_out = nn.Linear(cfg.ffn_in, cfg.d_model)
+        self.ReLU = nn.ReLU()
+
+    def forward(
+        self, x: torch.Tensor[Float, "batch seq_len d_model"]
+    ) -> torch.Tensor[Float, "batch seq_len d_model"]:
+        return self.W_out(self.ReLU(self.W_in(x)))
+
+
+class TransformerLayer(nn.Module):
+    """A transformer layer"""
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.cfg = cfg
+
+        self.attn = MultiHeadAttention(cfg)
+        self.ffn = FFN(cfg)
+
+    def forward(
+        self, x: torch.Tensor[Float, "batch seq_len d_model"]
+    ) -> torch.Tensor[Float, "batch seq_len d_model"]:
+        x = self.attn(x) + x
+        x = self.ffn(x) + x
+        return x
+
+
 class NanoTitanModel(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.cfg = cfg
         self.token_embed = TokenEmbed(cfg)
         self.position_embed = PositionEmbed(cfg)
-        self.layers = nn.ModuleList(MultiHeadAttention(cfg) for _ in range(cfg.n_layers))
+        self.layers = nn.ModuleList(TransformerLayer(cfg) for _ in range(cfg.n_layers))
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
         token_emb = self.token_embed(input_ids)
         pos_embed = self.position_embed(token_emb)
         x = token_emb + pos_embed
-        x = self.layers(x)
+        for layer in self.layers:
+            x = layer(x)
         return x
