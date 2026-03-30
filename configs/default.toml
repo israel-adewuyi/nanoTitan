@@ -1,0 +1,5 @@
+[model]
+vocab_size = 32000
+d_model = 256
+max_seq_len = 128
+
