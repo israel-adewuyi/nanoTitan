@@ -2,6 +2,9 @@
 vocab_size = 32000
 d_model = 256
 max_seq_len = 128
+n_layers = 2
+d_head = 16
+n_heads = 16
 
 [trainer]
 device_id = 3
