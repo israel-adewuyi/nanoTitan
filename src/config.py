@@ -7,6 +7,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    NonNegativeInt,
     PositiveInt,
     model_validator,
 )
@@ -43,16 +44,17 @@ class ModelConfig(BaseModel):
         return self
 
 
-class DeviceConfig(BaseModel):
+class TrainerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    device_id: List
+
+    device_id: NonNegativeInt
 
 
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model: ModelConfig
-    device_id: DeviceConfig
+    trainer: TrainerConfig
 
 
 def resolve_config_path(path: str | Path) -> Path:
