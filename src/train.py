@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 
+from torch.utils.data import DataLoader
+
 from src.config import AppConfig, load_config
+from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 
 
@@ -26,6 +29,23 @@ def normalize_config_arg(config_arg: str) -> str:
     return config_arg[1:] if config_arg.startswith("@") else config_arg
 
 
+def load_dataloader(cfg):
+    train_dataset = PackedTokenDataset(
+        path=cfg.data.train_tokens_path,
+        seq_len=cfg.model.max_seq_len
+    )
+
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=cfg.model.batch_size,
+        shuffle=True,
+        num_workers=cfg.data.num_workers,
+        pin_memory=True,
+        drop_last=True,
+    )
+    return train_loader
+
+
 def build_from_config(config_arg: str) -> tuple[AppConfig, NanoTitanModel]:
     config_path = normalize_config_arg(config_arg)
     app_config = load_config(config_path)
@@ -43,6 +63,10 @@ def main() -> None:
     print(f"Number of parameters are {sum(p.numel() for p in model.parameters())}")
     if args.single_gpu:
         print("single_gpu mode enabled")
+
+    train_loader = load_dataloader(app_config)
+
+    print(train_loader)
 
 
 if __name__ == "__main__":

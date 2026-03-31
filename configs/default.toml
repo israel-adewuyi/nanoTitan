@@ -6,6 +6,12 @@ n_layers = 2
 d_head = 16
 n_heads = 16
 ffn_in = 512
+batch_size = 2
 
 [trainer]
 device_id = 3
+
+[data]
+train_tokens_path = "data/preprocessed/tinystories_train.bin"
+val_tokens_path = "data/preprocessed/tinystories_val.bin"
+num_workers = 4

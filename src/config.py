@@ -12,6 +12,13 @@ from pydantic import (
     model_validator,
 )
 
+class DataConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    num_workers: PositiveInt
+    train_tokens_path: str
+    val_tokens_path: str
+
 
 class TokenEmbeddingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -31,6 +38,7 @@ class ModelConfig(BaseModel):
     n_layers: PositiveInt
     max_seq_len: PositiveInt
     ffn_in: PositiveInt
+    batch_size: PositiveInt
     token_embedding: TokenEmbeddingConfig = Field(default_factory=TokenEmbeddingConfig)
     positional_embedding: PositionalEmbeddingConfig = Field(
         default_factory=PositionalEmbeddingConfig
@@ -56,6 +64,7 @@ class AppConfig(BaseModel):
 
     model: ModelConfig
     trainer: TrainerConfig
+    data: DataConfig
 
 
 def resolve_config_path(path: str | Path) -> Path:
