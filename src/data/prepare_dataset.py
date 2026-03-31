@@ -1,6 +1,8 @@
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 from datasets import load_dataset
+
 from src.data.tokenizer import TiktokenTokenizer
 
 

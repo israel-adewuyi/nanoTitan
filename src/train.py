@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import torch
 import argparse
 
+import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.config import AppConfig, load_config
 from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
+from src.optim import setup_optimizer
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,7 +32,7 @@ def normalize_config_arg(config_arg: str) -> str:
     return config_arg[1:] if config_arg.startswith("@") else config_arg
 
 
-def load_dataloader(cfg):
+def load_dataloader(cfg: AppConfig):
     train_dataset = PackedTokenDataset(
         path=cfg.data.train_tokens_path, seq_len=cfg.model.max_seq_len
     )
@@ -53,9 +55,16 @@ def build_from_config(config_arg: str) -> tuple[AppConfig, NanoTitanModel]:
     return app_config, model
 
 
+def resolve_device(cfg: AppConfig) -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda:cfg.trainer.device_id")
+    return torch.device("cpu")
+
+
 def main() -> None:
     args = parse_args()
     app_config, model = build_from_config(args.config)
+    device = resolve_device(app_config)
 
     print(f"Loaded model config from {normalize_config_arg(args.config)}")
     print(app_config.model.model_dump())
@@ -65,17 +74,16 @@ def main() -> None:
         print("single_gpu mode enabled")
 
     train_loader = load_dataloader(app_config)
-    model = model.to("cuda:3")
+    model = model.to(device)
+    _optimizer = setup_optimizer(cfg.optim, model)
     print(next(model.parameters()).device)
 
     for x, y in train_loader:
-        x = x.to("cuda:3")
-        y = y.to("cuda:3")
+        x = x.to(device)
+        y = y.to(device)
         y = y.unsqueeze(2)
         logits = model(x)
-        print(y.dtype)
-        out = torch.gather(logits, dim=-1, index=y).squeeze(2)
-        loss = out.log().sum(dim=-1).mean()
+        loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
         print(f"Shape of out is {out.shape}")
         print(f"Shape of loss i {loss.shape}")
         break
