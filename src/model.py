@@ -21,7 +21,16 @@ class TokenEmbed(nn.Module):
     def forward(
         self, input_ids: torch.Tensor[Float, "batch seq_len"]
     ) -> torch.Tensor[Float, "batch seq_len d_model"]:
-        return self.token_embed(input_ids) * self.scale
+        return self.token_embed(input_ids)
+
+    def project(
+        self, hidden_states: torch.Tensor[Float, "batch seq_len d_model"]
+    ) -> torch.Tensor[Float, "batch seq_len vocab_size"]:
+        return einops.einsum(
+            self.token_embed.weight,
+            hidden_states,
+            "vocab_size d_model, batch seq_len d_model -> batch seq_len vocab_size",
+        )
 
 
 class PositionEmbed(nn.Module):
@@ -153,4 +162,5 @@ class NanoTitanModel(nn.Module):
         x = token_emb + pos_embed
         for layer in self.layers:
             x = layer(x)
+        x = self.token_embed.project(x)
         return x
