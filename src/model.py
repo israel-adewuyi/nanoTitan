@@ -78,19 +78,31 @@ class MultiHeadAttention(nn.Module):
         Q = einops.einsum(
             x,
             self.W_Q,
-            "batch seq_len d_model, d_model (d_head n_heads) -> batch seq_len n_heads d_head",
+            "batch seq_len d_model, d_model d_out -> batch seq_len d_out",
+        )
+        Q = einops.rearrange(
+            Q, "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.cfg.n_heads, d_head=self.cfg.d_head
         )
         K = einops.einsum(
             x,
             self.W_K,
-            "batch seq_len d_model, d_model (d_head n_heads) -> batch seq_len n_heads d_head",
+            "batch seq_len d_model, d_model d_out -> batch seq_len d_out",
+        )
+        K = einops.rearrange(
+            K, "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.cfg.n_heads, d_head=self.cfg.d_head
         )
         V = einops.einsum(
             x,
             self.W_V,
-            "batch seq_len d_model, d_model (d_head n_heads) -> batch seq_len n_heads d_head",
+            "batch seq_len d_model, d_model d_out -> batch seq_len d_out",
         )
-        mask = torch.tril(torch.ones(seq_len, seq_len), dtype=torch.bool)[None, None, :, :].to(
+        V = einops.rearrange(
+            V, "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.cfg.n_heads, d_head=self.cfg.d_head
+        )
+        mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool))[None, None, :, :].to(
             x.device
         )
         attn_scores = einops.einsum(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import torch
 import argparse
 
 from torch.utils.data import DataLoader
@@ -64,9 +65,19 @@ def main() -> None:
         print("single_gpu mode enabled")
 
     train_loader = load_dataloader(app_config)
+    model = model.to("cuda:3")
+    print(next(model.parameters()).device)
 
-    for x, _y in train_loader:
-        print(x)
+    for x, y in train_loader:
+        x = x.to("cuda:3")
+        y = y.to("cuda:3")
+        y = y.unsqueeze(2)
+        logits = model(x)
+        print(y.dtype)
+        out = torch.gather(logits, dim=-1, index=y).squeeze(2)
+        loss = out.log().sum(dim=-1).mean()
+        print(f"Shape of out is {out.shape}")
+        print(f"Shape of loss i {loss.shape}")
         break
 
 
