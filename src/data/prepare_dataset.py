@@ -1,11 +1,12 @@
 import numpy as np
 from pathlib import Path
+from datasets import load_dataset
 from src.data.tokenizer import TiktokenTokenizer
 
 
 def write_token_file(token_ids: list[int], path: str) -> None:
     token_arr = np.array(token_ids, dtype=np.uint16)
-    Path(path).parent.mkdir(parents=True, exists_ok=True)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     token_arr.tofile(path)
 
 
@@ -14,7 +15,7 @@ def main() -> None:
 
     dataset = load_dataset("roneneldan/TinyStories")
     train_dataset = dataset["train"]
-    val_dataset = dataset["validatioin"] if "validation" in dataset else None
+    val_dataset = dataset["validation"] if "validation" in dataset else None
 
     def tokenize_split(split):
         all_tokens = []
@@ -27,7 +28,7 @@ def main() -> None:
     train_tokens = tokenize_split(train_dataset)
     write_token_file(train_tokens, "data/preprocessed/tinystories_train.bin")
 
-    if val_ds is not None:
+    if val_dataset is not None:
         val_tokens = tokenize_split(val_dataset)
         write_token_file(val_tokens, "data/preprocessed/tinystories_val.bin")
 
