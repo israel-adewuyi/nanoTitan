@@ -57,7 +57,7 @@ def build_from_config(config_arg: str) -> tuple[AppConfig, NanoTitanModel]:
 
 def resolve_device(cfg: AppConfig) -> torch.device:
     if torch.cuda.is_available():
-        return torch.device("cuda:cfg.trainer.device_id")
+        return torch.device(f"cuda:{cfg.trainer.device_id}")
     return torch.device("cpu")
 
 
@@ -75,8 +75,10 @@ def main() -> None:
 
     train_loader = load_dataloader(app_config)
     model = model.to(device)
-    _optimizer = setup_optimizer(cfg.optim, model)
+    optimizer = setup_optimizer(app_config.optim, model)
     print(next(model.parameters()).device)
+
+    iter = 50
 
     for x, y in train_loader:
         x = x.to(device)
@@ -84,10 +86,17 @@ def main() -> None:
         y = y.unsqueeze(2)
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
-        print(f"Shape of out is {out.shape}")
-        print(f"Shape of loss i {loss.shape}")
-        break
 
+        print(f"Loss is {loss.item()}")
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        iter -= 1
+
+        if iter == 0:
+            break
 
 if __name__ == "__main__":
     main()
