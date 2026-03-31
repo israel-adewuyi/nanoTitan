@@ -31,12 +31,11 @@ def normalize_config_arg(config_arg: str) -> str:
 
 def load_dataloader(cfg):
     train_dataset = PackedTokenDataset(
-        path=cfg.data.train_tokens_path,
-        seq_len=cfg.model.max_seq_len
+        path=cfg.data.train_tokens_path, seq_len=cfg.model.max_seq_len
     )
 
     train_loader = DataLoader(
-        train_dataset, 
+        train_dataset,
         batch_size=cfg.model.batch_size,
         shuffle=True,
         num_workers=cfg.data.num_workers,
@@ -66,7 +65,9 @@ def main() -> None:
 
     train_loader = load_dataloader(app_config)
 
-    print(train_loader)
+    for x, _y in train_loader:
+        print(x)
+        break
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
-import torch
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 
@@ -16,7 +17,7 @@ class PackedTokenDataset(Dataset):
     def __len__(self) -> int:
         return self.num_sequences
 
-    def __getitetm__(self, idx: int):
+    def __getitem__(self, idx: int):
         start = idx * self.seq_len
         end = start * self.seq_len + 1
 
