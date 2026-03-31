@@ -12,12 +12,20 @@ from pydantic import (
     model_validator,
 )
 
+
 class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     num_workers: PositiveInt
     train_tokens_path: str
     val_tokens_path: str
+
+
+class OptimizerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    lr: float
 
 
 class TokenEmbeddingConfig(BaseModel):
@@ -65,6 +73,7 @@ class AppConfig(BaseModel):
     model: ModelConfig
     trainer: TrainerConfig
     data: DataConfig
+    optim: OptimizerConfig
 
 
 def resolve_config_path(path: str | Path) -> Path:

@@ -1,5 +1,7 @@
-import tiktoken
 from dataclasses import dataclass
+
+import tiktoken
+
 
 @dataclass
 class TiktokenTokenizer:

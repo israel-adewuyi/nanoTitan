@@ -15,3 +15,7 @@ device_id = 3
 train_tokens_path = "data/preprocessed/tinystories_train.bin"
 val_tokens_path = "data/preprocessed/tinystories_val.bin"
 num_workers = 4
+
+[optim]
+type = "adam"
+lr = "1e-3"
