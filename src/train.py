@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 
 import torch
 import torch.nn.functional as F
@@ -67,9 +68,19 @@ def load_val_dataloader(cfg: AppConfig):
     return val_loader
 
 
+def setup_dist_process():
+    world_size = os.environ["WORLD_SIZE"]
+    rank = os.environ["RANK"]
+    local_rank = os.environ["LOCAL_RANK"]
+
+    return world_size, rank, local_rank
+
+
 def main() -> None:
     setup_logging()
     args = parse_args()
+
+    world_size, rank, local_rank = setup_dist_prcess()
 
     # get configs and setup tb logger
     cfg = load_run_config(args.config)
