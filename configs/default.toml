@@ -1,3 +1,6 @@
+run_name = "demo_testing"
+
+
 [model]
 vocab_size = 50257
 d_model = 128
