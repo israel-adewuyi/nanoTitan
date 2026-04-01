@@ -57,6 +57,22 @@ class PositionEmbed(nn.Module):
         return self.pos_embed[:seq_len].unsqueeze(0)
 
 
+class LayerNorm(nn.Module):
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.d_model = cfg.d_model
+        self.gamma = nn.Parameter(torch.ones(self.d_model))
+        self.beta = nn.Parameter(torch.zeros(self.d_model))
+
+    def forward(
+        self, x: torch.Tensor[Float, "batch seq_len d_model"]
+    ) -> torch.Tensor[Float, "batch seq_len d_model"]:
+        x_mean = x.mean(dim=-1, keepdim=True)
+        x_var = x.var(dim=-1, keepdim=True)
+        normalized_x = (x - x_mean) / torch.sqrt(x_var + 1e-8)
+        return normalized_x * self.gamma + self.beta
+
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -81,8 +97,10 @@ class MultiHeadAttention(nn.Module):
             "batch seq_len d_model, d_model d_out -> batch seq_len d_out",
         )
         Q = einops.rearrange(
-            Q, "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
-            n_heads=self.cfg.n_heads, d_head=self.cfg.d_head
+            Q,
+            "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.cfg.n_heads,
+            d_head=self.cfg.d_head,
         )
         K = einops.einsum(
             x,
@@ -90,8 +108,10 @@ class MultiHeadAttention(nn.Module):
             "batch seq_len d_model, d_model d_out -> batch seq_len d_out",
         )
         K = einops.rearrange(
-            K, "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
-            n_heads=self.cfg.n_heads, d_head=self.cfg.d_head
+            K,
+            "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.cfg.n_heads,
+            d_head=self.cfg.d_head,
         )
         V = einops.einsum(
             x,
@@ -99,8 +119,10 @@ class MultiHeadAttention(nn.Module):
             "batch seq_len d_model, d_model d_out -> batch seq_len d_out",
         )
         V = einops.rearrange(
-            V, "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
-            n_heads=self.cfg.n_heads, d_head=self.cfg.d_head
+            V,
+            "batch seq_len (n_heads d_head) -> batch seq_len n_heads d_head",
+            n_heads=self.cfg.n_heads,
+            d_head=self.cfg.d_head,
         )
         mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool))[None, None, :, :].to(
             x.device
@@ -151,12 +173,14 @@ class TransformerLayer(nn.Module):
 
         self.attn = MultiHeadAttention(cfg)
         self.ffn = FFN(cfg)
+        self.attn_norm = LayerNorm(cfg)
+        self.ffn_norm = LayerNorm(cfg)
 
     def forward(
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
     ) -> torch.Tensor[Float, "batch seq_len d_model"]:
-        x = self.attn(x) + x
-        x = self.ffn(x) + x
+        x = self.attn(self.attn_norm(x)) + x
+        x = self.ffn(self.ffn_norm(x)) + x
         return x
 
 
