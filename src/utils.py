@@ -32,7 +32,7 @@ def load_run_config(config_arg: str) -> AppConfig:
     return app_config
 
 
-def resolve_device(cfg: AppConfig) -> torch.device:
+def resolve_device(device_id: int) -> torch.device:
     if torch.cuda.is_available():
-        return torch.device(f"cuda:{cfg.trainer.device_id}")
+        return torch.device(f"cuda:{device_id}")
     return torch.device("cpu")
