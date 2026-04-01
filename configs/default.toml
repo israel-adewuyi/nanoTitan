@@ -1,12 +1,12 @@
 [model]
 vocab_size = 50257
 d_model = 128
-max_seq_len = 128
+max_seq_len = 1024
 n_layers = 4
 d_head = 16
 n_heads = 8
 ffn_in = 256
-batch_size = 2
+batch_size = 16
 
 [trainer]
 device_id = 3
