@@ -22,6 +22,8 @@ from src.utils import (
 
 logger = logging.getLogger(__name__)
 
+required_env_vars = {"WORLD_SIZE", "RANK", "LOCAL_RANK"}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -80,23 +82,31 @@ def main() -> None:
     setup_logging()
     args = parse_args()
 
-    world_size, rank, local_rank = setup_dist_process()
-
     # get configs and setup tb logger
     cfg = load_run_config(args.config)
-    metrics_logger = setup_tensorboard(cfg.run_name)
+
+    # instantiate the relevant environment vars, based on if process in distributed mode or not
+    if required_env_vars.issubset(os.environ):
+        world_size, rank, local_rank = setup_dist_process()
+    else:
+        world_size, rank, local_rank = 1, 0, cfg.trainer.device_id
+
+    if rank == 0:
+        metrics_logger = setup_tensorboard(cfg.run_name)
     device = resolve_device(local_rank)
 
     # Setup the model
     model = NanoTitanModel(cfg.model).to(device)
-    metrics_logger.log_config(cfg.model_dump())
+    if rank == 0:
+        metrics_logger.log_config(cfg.model_dump())
 
-    # Some detail logs about model and args
-    logger.info("Loaded model config from %s", normalize_config_arg(args.config))
-    logger.info("Model config: %s", cfg.model.model_dump())
-    logger.info("Number of parameters: %s", sum(p.numel() for p in model.parameters()))
-    if args.single_gpu:
-        logger.info("single_gpu mode enabled")
+        # Some detail logs about model and args
+        logger.info(f"World size is {world_size}")
+        logger.info("Loaded model config from %s", normalize_config_arg(args.config))
+        logger.info("Model config: %s", cfg.model.model_dump())
+        logger.info("Number of parameters: %s", sum(p.numel() for p in model.parameters()))
+        if args.single_gpu:
+            logger.info("single_gpu mode enabled")
 
     # Setup the data loader for train and test
     train_loader = load_train_dataloader(cfg)
@@ -104,7 +114,8 @@ def main() -> None:
 
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
-    logger.info("Model device: %s", next(model.parameters()).device)
+    if rank == 0:
+        logger.info("Model device: %s", next(model.parameters()).device)
 
     iter = 50
     num_batches = len(train_loader)
@@ -117,7 +128,8 @@ def main() -> None:
             logits = model(x)
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
 
-            logger.info("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
+            if rank == 0:
+                logger.info("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
 
             optimizer.zero_grad()
             loss.backward()
@@ -130,20 +142,21 @@ def main() -> None:
                 total_grad_norm_sq += grad_norm.item() ** 2
             total_grad_norm = total_grad_norm_sq**0.5
 
-            metrics_logger.log(
-                step,
-                {
-                    "train/loss": loss.item(),
-                    "train/grad_norm": total_grad_norm,
-                },
-            )
+            if rank == 0:
+                metrics_logger.log(
+                    step,
+                    {
+                        "train/loss": loss.item(),
+                        "train/grad_norm": total_grad_norm,
+                    },
+                )
 
             optimizer.step()
 
-            # iter -= 1
+            iter -= 1
 
-            # if iter == 0:
-            #     break
+            if iter == 0:
+                break
 
             if step % cfg.trainer.eval_every_step == 0:
                 model.eval()
@@ -165,12 +178,14 @@ def main() -> None:
 
                 model.train()
                 val_loss = total_loss / num_val_batches
-                logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
-                metrics_logger.log(step, {"val/loss": val_loss})
+                if rank == 0:
+                    logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
+                    metrics_logger.log(step, {"val/loss": val_loss})
 
             step += 1
     finally:
-        metrics_logger.close()
+        if rank == 0:
+            metrics_logger.close()
 
 
 if __name__ == "__main__":
