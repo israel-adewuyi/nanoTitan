@@ -129,10 +129,10 @@ def main() -> None:
 
             optimizer.step()
 
-            iter -= 1
+            # iter -= 1
 
-            if iter == 0:
-                break
+            # if iter == 0:
+            #     break
 
             if step % cfg.trainer.eval_every_step == 0:
                 model.eval()
