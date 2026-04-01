@@ -1,8 +1,11 @@
 import logging
+from datetime import datetime
+from pathlib import Path
 
 import torch
 
 from src.config import AppConfig, load_config
+from src.metrics import MetricsLogger
 
 
 def setup_logging(level: str = "INFO") -> None:
@@ -10,6 +13,13 @@ def setup_logging(level: str = "INFO") -> None:
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
+
+
+def setup_tensorboard(run_name: str, log_root: str = "runs") -> MetricsLogger:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = Path(log_root) / f"{run_name}-{timestamp}"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return MetricsLogger(str(log_dir))
 
 
 def normalize_config_arg(config_arg: str) -> str:

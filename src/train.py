@@ -11,7 +11,13 @@ from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.optim import setup_optimizer
-from src.utils import load_run_config, normalize_config_arg, resolve_device, setup_logging
+from src.utils import (
+    load_run_config,
+    normalize_config_arg,
+    resolve_device,
+    setup_logging,
+    setup_tensorboard,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +70,28 @@ def load_val_dataloader(cfg: AppConfig):
 def main() -> None:
     setup_logging()
     args = parse_args()
-    cfg = load_run_config(args.config)
-    device = resolve_device(cfg)
-    model = NanoTitanModel(cfg.model).to(device)
 
+    # get configs and setup tb logger
+    cfg = load_run_config(args.config)
+    metrics_logger = setup_tensorboard(cfg.run_name)
+    device = resolve_device(cfg)
+
+    # Setup the model
+    model = NanoTitanModel(cfg.model).to(device)
+    metrics_logger.log_config(cfg.model_dump())
+
+    # Some detail logs about model and args
     logger.info("Loaded model config from %s", normalize_config_arg(args.config))
     logger.info("Model config: %s", cfg.model.model_dump())
     logger.info("Number of parameters: %s", sum(p.numel() for p in model.parameters()))
     if args.single_gpu:
         logger.info("single_gpu mode enabled")
 
+    # Setup the data loader for train and test
     train_loader = load_train_dataloader(cfg)
     val_loader = load_val_dataloader(cfg)
+
+    # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
     logger.info("Model device: %s", next(model.parameters()).device)
 
@@ -83,45 +99,67 @@ def main() -> None:
     num_batches = len(train_loader)
 
     step = 0
-    for x, y in train_loader:
-        x = x.to(device)
-        y = y.to(device)
-        y = y.unsqueeze(2)
-        logits = model(x)
-        loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
+    try:
+        for x, y in train_loader:
+            x = x.to(device)
+            y = y.to(device)
+            logits = model(x)
+            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
 
-        logger.info(f"[Step {step}/{num_batches}] Loss: %.6f", loss.item())
+            logger.info("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            loss.backward()
 
-        iter -= 1
+            total_grad_norm_sq = 0.0
+            for param in model.parameters():
+                if param.grad is None:
+                    continue
+                grad_norm = param.grad.detach().norm(2)
+                total_grad_norm_sq += grad_norm.item() ** 2
+            total_grad_norm = total_grad_norm_sq**0.5
 
-        if iter == 0:
-            break
+            metrics_logger.log(
+                step,
+                {
+                    "train/loss": loss.item(),
+                    "train/grad_norm": total_grad_norm,
+                },
+            )
 
-        if step % cfg.trainer.eval_every_step == 0:
-            model.eval()
-            total_loss = 0.0
-            num_batches = 0
+            optimizer.step()
 
-            with torch.no_grad():
-                for val_x, val_y in val_loader:
-                    val_x = val_x.to(device)
-                    val_y = val_y.to(device)
+            iter -= 1
 
-                    logits = model(val_x)
-                    loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), val_y.reshape(-1))
+            if iter == 0:
+                break
 
-                    total_loss += loss.item()
-                    num_batches += 1
+            if step % cfg.trainer.eval_every_step == 0:
+                model.eval()
+                total_loss = 0.0
+                num_val_batches = 0
 
-            model.train()
-            val_loss = total_loss / num_batches
-            logger.info(f"[Step {step}]: Validation loss: %.6f", val_loss)
+                with torch.no_grad():
+                    for val_x, val_y in val_loader:
+                        val_x = val_x.to(device)
+                        val_y = val_y.to(device)
 
-        step += 1
+                        logits = model(val_x)
+                        loss = F.cross_entropy(
+                            logits.reshape(-1, logits.size(-1)), val_y.reshape(-1)
+                        )
+
+                        total_loss += loss.item()
+                        num_val_batches += 1
+
+                model.train()
+                val_loss = total_loss / num_val_batches
+                logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
+                metrics_logger.log(step, {"val/loss": val_loss})
+
+            step += 1
+    finally:
+        metrics_logger.close()
 
 
 if __name__ == "__main__":
