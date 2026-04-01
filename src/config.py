@@ -70,7 +70,7 @@ class TrainerConfig(BaseModel):
 
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    run_name = "demo"
+    run_name: str
     model: ModelConfig
     trainer: TrainerConfig
     data: DataConfig
