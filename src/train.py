@@ -80,6 +80,7 @@ def main() -> None:
     logger.info("Model device: %s", next(model.parameters()).device)
 
     iter = 50
+    num_batches = len(train_loader)
 
     step = 0
     for x, y in train_loader:
@@ -89,7 +90,7 @@ def main() -> None:
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
 
-        logger.info("Loss: %.6f", loss.item())
+        logger.info(f"[Step {step}/{num_batches}] Loss: %.6f", loss.item())
 
         optimizer.zero_grad()
         loss.backward()
