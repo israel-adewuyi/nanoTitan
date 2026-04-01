@@ -1,8 +1,20 @@
+import logging
+
 import torch
+
 from src.config import AppConfig, load_config
+
+
+def setup_logging(level: str = "INFO") -> None:
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+
 
 def normalize_config_arg(config_arg: str) -> str:
     return config_arg[1:] if config_arg.startswith("@") else config_arg
+
 
 def load_run_config(config_arg: str) -> AppConfig:
     config_path = normalize_config_arg(config_arg)

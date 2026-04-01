@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
-import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from src.config import AppConfig, load_config
+from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.optim import setup_optimizer
-from src.utils import normalize_config_arg, load_run_config, resolve_device
+from src.utils import load_run_config, normalize_config_arg, resolve_device, setup_logging
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,20 +48,21 @@ def load_dataloader(cfg: AppConfig):
 
 
 def main() -> None:
+    setup_logging()
     args = parse_args()
     app_config = load_run_config(args.config)
     device = resolve_device(app_config)
     model = NanoTitanModel(app_config.model).to(device)
 
-    print(f"Loaded model config from {normalize_config_arg(args.config)}")
-    print(app_config.model.model_dump())
-    print(f"Number of parameters are {sum(p.numel() for p in model.parameters())}")
+    logger.info("Loaded model config from %s", normalize_config_arg(args.config))
+    logger.info("Model config: %s", app_config.model.model_dump())
+    logger.info("Number of parameters: %s", sum(p.numel() for p in model.parameters()))
     if args.single_gpu:
-        print("single_gpu mode enabled")
+        logger.info("single_gpu mode enabled")
 
     train_loader = load_dataloader(app_config)
     optimizer = setup_optimizer(app_config.optim, model)
-    print(next(model.parameters()).device)
+    logger.info("Model device: %s", next(model.parameters()).device)
 
     iter = 50
 
@@ -70,7 +73,7 @@ def main() -> None:
         logits = model(x)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
 
-        print(f"Loss is {loss.item()}")
+        logger.info("Loss: %.6f", loss.item())
 
         optimizer.zero_grad()
         loss.backward()
@@ -80,6 +83,7 @@ def main() -> None:
 
         if iter == 0:
             break
+
 
 if __name__ == "__main__":
     main()
