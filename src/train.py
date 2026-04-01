@@ -69,9 +69,9 @@ def load_val_dataloader(cfg: AppConfig):
 
 
 def setup_dist_process():
-    world_size = os.environ["WORLD_SIZE"]
-    rank = os.environ["RANK"]
-    local_rank = os.environ["LOCAL_RANK"]
+    world_size = int(os.environ["WORLD_SIZE"])
+    rank = int(os.environ["RANK"])
+    local_rank = int(os.environ["LOCAL_RANK"])
 
     return world_size, rank, local_rank
 
@@ -80,12 +80,12 @@ def main() -> None:
     setup_logging()
     args = parse_args()
 
-    world_size, rank, local_rank = setup_dist_prcess()
+    world_size, rank, local_rank = setup_dist_process()
 
     # get configs and setup tb logger
     cfg = load_run_config(args.config)
     metrics_logger = setup_tensorboard(cfg.run_name)
-    device = resolve_device(cfg)
+    device = resolve_device(local_rank)
 
     # Setup the model
     model = NanoTitanModel(cfg.model).to(device)
