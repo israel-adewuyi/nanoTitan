@@ -10,6 +10,7 @@ batch_size = 16
 
 [trainer]
 device_id = 3
+eval_every_step = 10
 
 [data]
 train_tokens_path = "data/preprocessed/tinystories_train.bin"
