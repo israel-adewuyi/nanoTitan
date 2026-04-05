@@ -6,7 +6,9 @@ import os
 
 import torch
 import torch.nn.functional as F
+from torch.distributed import init_process_group
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
@@ -49,7 +51,11 @@ def load_train_dataloader(cfg: AppConfig):
     train_loader = DataLoader(
         train_dataset,
         batch_size=cfg.model.batch_size,
-        shuffle=True,
+        # shuffle=False,
+        sampler=DistributedSampler(
+            dataset=train_dataset,
+            shuffle=True,
+        ),
         num_workers=cfg.data.num_workers,
         pin_memory=True,
         drop_last=True,
@@ -64,6 +70,10 @@ def load_val_dataloader(cfg: AppConfig):
         val_dataset,
         batch_size=cfg.model.batch_size,
         num_workers=cfg.data.num_workers,
+        sampler=DistributedSampler(
+            dataset=val_dataset,
+            shuffle=False,
+        ),
         pin_memory=True,
         drop_last=True,
     )
@@ -88,6 +98,7 @@ def main() -> None:
     # instantiate the relevant environment vars, based on if process in distributed mode or not
     if required_env_vars.issubset(os.environ):
         world_size, rank, local_rank = setup_dist_process()
+        init_process_group(backend="nccl")
     else:
         world_size, rank, local_rank = 1, 0, cfg.trainer.device_id
 
