@@ -50,8 +50,7 @@ def load_train_dataloader(cfg: AppConfig):
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=cfg.model.batch_size,
-        # shuffle=False,
+        batch_size=cfg.trainer.per_device_batch_size,
         sampler=DistributedSampler(
             dataset=train_dataset,
             shuffle=True,
@@ -68,7 +67,7 @@ def load_val_dataloader(cfg: AppConfig):
 
     val_loader = DataLoader(
         val_dataset,
-        batch_size=cfg.model.batch_size,
+        batch_size=cfg.trainer.per_device_batch_size,
         num_workers=cfg.data.num_workers,
         sampler=DistributedSampler(
             dataset=val_dataset,
