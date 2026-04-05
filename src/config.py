@@ -46,7 +46,6 @@ class ModelConfig(BaseModel):
     n_layers: PositiveInt
     max_seq_len: PositiveInt
     ffn_in: PositiveInt
-    batch_size: PositiveInt
     token_embedding: TokenEmbeddingConfig = Field(default_factory=TokenEmbeddingConfig)
     positional_embedding: PositionalEmbeddingConfig = Field(
         default_factory=PositionalEmbeddingConfig
@@ -66,6 +65,7 @@ class TrainerConfig(BaseModel):
 
     device_id: NonNegativeInt
     eval_every_step: PositiveInt
+    per_device_batch_size: PositiveInt
 
 
 class AppConfig(BaseModel):
