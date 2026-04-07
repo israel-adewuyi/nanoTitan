@@ -34,10 +34,11 @@ class SingleDeviceRuntime(Runtime):
     def prepare_valloader(self, val_dataset: PackedTokenDataset):
         val_loader = DataLoader(
             val_dataset,
+            shuffle=False,
             batch_size=self.cfg.trainer.per_device_batch_size,
             num_workers=self.cfg.data.num_workers,
             pin_memory=True,
-            drop_last=True,
+            drop_last=False,
         )
         return val_loader
 

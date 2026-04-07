@@ -14,6 +14,10 @@ class Runtime(ABC):
         pass
 
     @abstractmethod
+    def log(self, step, values_to_log):
+        pass
+
+    @abstractmethod
     def prepare_trainloader(self, train_dataset):
         pass
 
