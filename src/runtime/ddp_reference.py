@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -34,9 +35,19 @@ class DDPRuntimeRef(Runtime):
         if is_main_process():
             self.metrics_logger = setup_tensorboard(self.cfg.run_name)
 
-    def log(self, step: int, values_to_log: dict) -> None:
+    def log(self, step: int, values_to_log: dict[str, float]) -> None:
+        reduced = {}
+        for k, v in values_to_log.items():
+            reduced[k] = self.reduce_scalar_values(v)
+
         if is_main_process():
-            self.metrics_logger.log(step, values_to_log)
+            self.metrics_logger.log(step, reduced)
+
+    def reduce_scalar_values(self, value: float) -> float:
+        value = torch.tensor([value], device=self.device, dtype=torch.float32)
+        dist.all_reduce(value, op=dist.ReduceOp.SUM)
+        value /= self.world_size
+        return value.item()
 
     def prepare_model(self, model: NanoTitanModel):
         model = model.to(self.device)
