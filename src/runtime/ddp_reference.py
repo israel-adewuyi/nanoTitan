@@ -18,6 +18,8 @@ from src.utils import setup_tensorboard
 
 
 class DDPRuntimeRef(Runtime):
+    """Reference DDP Implementation with torch.nn.parallel.DistributedDataParallel"""
+
     def __init__(self, cfg):
         super().__init__(cfg)
         self.setup()
@@ -69,8 +71,13 @@ class DDPRuntimeRef(Runtime):
     def backward(self, loss):
         loss.backward()
 
+    def is_main_process():
+        return is_main_process()
+
     def finalize_backward(self):
         pass
 
     def cleanup(self):
+        if is_main_process():
+            self.metrics_logger.close()
         cleanup()

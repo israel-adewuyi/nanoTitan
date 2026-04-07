@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.runtime.base import Runtime
+from src.utils import setup_tensorboard
 
 
 class SingleDeviceRuntime(Runtime):
@@ -16,6 +17,10 @@ class SingleDeviceRuntime(Runtime):
     def setup(self):
         # TODO: Think on who sets this. Config?
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.metrics_logger = setup_tensorboard(self.cfg.run_name)
+
+    def log(self, step: int, values_to_log: dict) -> None:
+        self.metrics_logger.log(step, values_to_log)
 
     def prepare_model(self, model: NanoTitanModel):
         return model.to(self.device)
@@ -45,8 +50,11 @@ class SingleDeviceRuntime(Runtime):
     def backward(self, loss):
         loss.backward()
 
+    def is_main_process():
+        return True
+
     def finalize_backward(self):
         pass
 
     def cleanup(self):
-        pass
+        self.metrics_logger.close()
