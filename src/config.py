@@ -36,6 +36,12 @@ class PositionalEmbeddingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class RuntimeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Literal[single, ddp_reference, ddp]
+
+
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -75,6 +81,7 @@ class AppConfig(BaseModel):
     trainer: TrainerConfig
     data: DataConfig
     optim: OptimizerConfig
+    runtime: RuntimeConfig
 
 
 def resolve_config_path(path: str | Path) -> Path:
