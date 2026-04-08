@@ -82,7 +82,7 @@ class DDPRuntimeRef(Runtime):
     def backward(self, loss):
         loss.backward()
 
-    def is_main_process():
+    def is_main_process(self):
         return is_main_process()
 
     def finalize_backward(self):
