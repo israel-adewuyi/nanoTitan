@@ -140,7 +140,7 @@ def main() -> None:
                 val_loss = total_loss / num_val_batches
                 if runtime.is_main_process():
                     logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
-                    runtime.log(step, {"val/loss": val_loss})
+                runtime.log(step, {"val/loss": val_loss}) # TODO: I should log reduced scalars
 
             step += 1
     finally:

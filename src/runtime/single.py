@@ -50,7 +50,7 @@ class SingleDeviceRuntime(Runtime):
     def backward(self, loss):
         loss.backward()
 
-    def is_main_process():
+    def is_main_process(self):
         return True
 
     def finalize_backward(self):
