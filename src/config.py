@@ -39,7 +39,8 @@ class PositionalEmbeddingConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: Literal[single, ddp_reference, ddp]
+    name: str
+    # Literal[single, ddp_reference, ddp]
 
 
 class ModelConfig(BaseModel):
