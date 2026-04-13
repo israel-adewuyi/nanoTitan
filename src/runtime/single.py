@@ -23,9 +23,9 @@ class SingleDeviceRuntime(Runtime):
     def log(self, step: int, values_to_log: dict[str, ScalarMetric]) -> None:
         payload = {k: v.value for k, v in values_to_log.items()}
 
-        if "stats/tokens" in payload and "stats/train_step_time" in payload:
+        if "stats/train_step_time" in payload:
             payload["stats/tokens_per_sec"] = (
-                payload["stats/tokens"] / payload["stats/train_step_time"]
+                self.tokens_per_step / payload["stats/train_step_time"]
             )
         self.metrics_logger.log(step, payload)
 
