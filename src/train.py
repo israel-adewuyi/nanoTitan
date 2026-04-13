@@ -73,7 +73,7 @@ def main() -> None:
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    iter = 50
+    iter = 1000
     num_batches = len(train_loader)
 
     step = 0

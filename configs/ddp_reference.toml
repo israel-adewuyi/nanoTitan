@@ -1,18 +1,19 @@
-run_name = "ddp_reference"
+run_name = "referenceDDP_8M_batch_size_per_device=8_seq_len=1024_steps=1000"
 
 [model]
 vocab_size = 50257
 d_model = 128
-max_seq_len = 128
-n_layers = 2
+max_seq_len = 1024
+n_layers = 8
 d_head = 16
 n_heads = 8
-ffn_in = 128
+ffn_in = 512
 
 [trainer]
+seed = 42
 device_id = 3
-eval_every_step = 500
-per_device_batch_size = 2
+eval_every_step = -1
+per_device_batch_size = 8
 
 [data]
 train_tokens_path = "data/preprocessed/tinystories_train.bin"
