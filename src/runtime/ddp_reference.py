@@ -34,6 +34,7 @@ class DDPRuntimeRef(Runtime):
 
         if is_main_process():
             self.metrics_logger = setup_tensorboard(self.cfg.run_name)
+            self.metrics_logger.log_config(self.cfg.model_dump())
 
     def log(self, step: int, values_to_log: dict[str, float]) -> None:
         reduced = {}
