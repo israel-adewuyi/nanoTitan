@@ -18,6 +18,7 @@ class SingleDeviceRuntime(Runtime):
         # TODO: Think on who sets this. Config?
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.metrics_logger = setup_tensorboard(self.cfg.run_name)
+        self.metrics_logger.log_config(self.cfg.model_dump())
 
     def log(self, step: int, values_to_log: dict) -> None:
         self.metrics_logger.log(step, values_to_log)
