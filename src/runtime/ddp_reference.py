@@ -88,6 +88,10 @@ class DDPRuntimeRef(Runtime):
     def finalize_backward(self):
         pass
 
+    @property
+    def tokens_per_step(self):
+        return self.cfg.trainer.per_device_batch_size * self.cfg.model.max_seq_len * self.world_size
+
     def cleanup(self):
         if is_main_process():
             self.metrics_logger.close()

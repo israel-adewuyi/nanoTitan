@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+import time
 import torch
 import torch.nn.functional as F
 
@@ -82,6 +83,8 @@ def main() -> None:
         if hasattr(train_loader.sampler, "set_epoch"):
             train_loader.sampler.set_epoch(0)
 
+        prev_time = time.perf_counter()
+
         for x, y in train_loader:
             x = x.to(runtime.device)
             y = y.to(runtime.device)
@@ -103,22 +106,27 @@ def main() -> None:
                 total_grad_norm_sq += grad_norm.item() ** 2
             total_grad_norm = total_grad_norm_sq**0.5
 
+            optimizer.step()
+
+            iter -= 1
+
+            elapsed_time = time.perf_counter() - prev_time
+            prev_time = elapsed_time
+
             runtime.log(
                 step,
                 {
+                    "stats/elapsed_time_per_step": elapsed_time,
+                    "stats/tokens_per_step": runtime.tokens_per_step,
                     "train/loss": loss.item(),
                     "train/grad_norm": total_grad_norm,
                 },
             )
 
-            optimizer.step()
-
-            iter -= 1
-
             if iter == 0:
                 break
 
-            if step % cfg.trainer.eval_every_step == 0:
+            if (step + 1) % cfg.trainer.eval_every_step == 0:
                 model.eval()
                 total_loss = 0.0
                 num_val_batches = 0
