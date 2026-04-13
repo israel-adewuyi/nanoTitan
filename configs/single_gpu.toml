@@ -24,4 +24,4 @@ type = "adam"
 lr = "1e-3"
 
 [runtime]
-name = "ddp_reference"
+name = "single"
