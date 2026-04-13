@@ -1,4 +1,5 @@
 import logging
+import random
 from datetime import datetime
 from pathlib import Path
 
@@ -36,3 +37,10 @@ def resolve_device(device_id: int) -> torch.device:
     if torch.cuda.is_available():
         return torch.device(f"cuda:{device_id}")
     return torch.device("cpu")
+
+
+def seed_everything(seed: int):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
