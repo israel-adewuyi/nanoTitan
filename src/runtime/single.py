@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 
 from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
-from src.runtime.base import Runtime
+from src.runtime.base import Runtime, ScalarMetric
 from src.utils import setup_tensorboard
 
 
@@ -20,8 +20,14 @@ class SingleDeviceRuntime(Runtime):
         self.metrics_logger = setup_tensorboard(self.cfg.run_name)
         self.metrics_logger.log_config(self.cfg.model_dump())
 
-    def log(self, step: int, values_to_log: dict) -> None:
-        self.metrics_logger.log(step, values_to_log)
+    def log(self, step: int, values_to_log: dict[str, ScalarMetric]) -> None:
+        payload = {k: v.value for k, v in values_to_log.items()}
+
+        if "stats/tokens" in payload and "stats/train_step_time" in payload:
+            payload["stats/tokens_per_sec"] = (
+                payload["stats/tokens"] / payload["stats/train_step_time"]
+            )
+        self.metrics_logger.log(step, payload)
 
     def prepare_model(self, model: NanoTitanModel):
         return model.to(self.device)

@@ -38,6 +38,33 @@ class MiniDDP(Runtime):
         self.reducer = ReducerV0(model, self.world_size)
         return model
 
+    def log(self, step: int, values_to_log: dict[str, float]) -> None:
+        reduced = {}
+        for k, metric in values_to_log.items():
+            reduced[k] = self.reduce_scalar(metric.value, metric.reduce)
+
+        if "stats/tokens" in reduced and "stats/train_step_time" in reduced:
+            reduced["stats/tokens_per_sec"] = (
+                reduced["stats/tokens"] / reduced["stats/train_step_time"]
+            )
+        if is_main_process():
+            self.metrics_logger.log(step, reduced)
+
+    def reduce_scalar(self, value: float | int, reduce: str) -> float:
+        value = torch.tensor([value], device=self.device, dtype=torch.float32)
+
+        if reduce == "mean":
+            dist.all_reduce(value, op=dist.ReduceOp.SUM)
+            value /= self.world_size
+        elif reduce == "max":
+            dist.all_reduce(value, op=dist.ReduceOp.MAX)
+        elif reduce == "none":
+            pass
+        else:
+            raise ValueError(f"Unknown reduce type: {reduce}")
+
+        return value.item()
+
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
         train_loader = DataLoader(
             train_dataset,
