@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-
 import time
+
 import torch
 import torch.nn.functional as F
 
@@ -12,11 +12,7 @@ from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.optim import setup_optimizer
 from src.runtime import DDPRuntimeRef, SingleDeviceRuntime
-from src.utils import (
-    load_run_config,
-    normalize_config_arg,
-    setup_logging,
-)
+from src.utils import load_run_config, normalize_config_arg, seed_everything, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +46,10 @@ def main() -> None:
     setup_logging()
     args = parse_args()
 
-    # get configs and setup runtime
+    # get configs, setup runtime, seed everything
     cfg = load_run_config(args.config)
     runtime = build_runtime(cfg)
+    seed_everything(cfg.trainer.seed)
 
     # Setup the data loader for train and test
     train_dataset = PackedTokenDataset(
@@ -66,11 +63,11 @@ def main() -> None:
     model = runtime.prepare_model(NanoTitanModel(cfg.model))
 
     if runtime.is_main_process():
-        #     metrics_logger.log_config(cfg.model_dump())
         # Some detail logs about model and args
         logger.info("Loaded model config from %s", normalize_config_arg(args.config))
         logger.info("Model config: %s", cfg.model.model_dump())
         logger.info("Number of parameters: %s", sum(p.numel() for p in model.parameters()))
+        logger.info(f"Runtime is {cfg.runtime.name}")
 
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
@@ -148,7 +145,7 @@ def main() -> None:
                 val_loss = total_loss / num_val_batches
                 if runtime.is_main_process():
                     logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
-                runtime.log(step, {"val/loss": val_loss}) # TODO: I should log reduced scalars
+                runtime.log(step, {"val/loss": val_loss})  # TODO: I should log reduced scalars
 
             step += 1
     finally:
