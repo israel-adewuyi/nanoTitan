@@ -1,3 +1,5 @@
+from typing import Literal
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 ReduceOp = Literal["mean", "max", "none"]

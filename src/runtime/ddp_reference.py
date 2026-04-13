@@ -41,9 +41,9 @@ class DDPRuntimeRef(Runtime):
         for k, metric in values_to_log.items():
             reduced[k] = self.reduce_scalar(metric.value, metric.reduce)
 
-        if "stats/tokens" in reduced and "stats/train_step_time" in reduced:
+        if "stats/train_step_time" in reduced:
             reduced["stats/tokens_per_sec"] = (
-                reduced["stats/tokens"] / reduced["stats/train_step_time"]
+                self.tokens_per_step / reduced["stats/train_step_time"]
             )
         if is_main_process():
             self.metrics_logger.log(step, reduced)
