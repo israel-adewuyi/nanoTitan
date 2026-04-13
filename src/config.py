@@ -71,8 +71,9 @@ class TrainerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     device_id: NonNegativeInt
-    eval_every_step: PositiveInt
+    eval_every_step: int
     per_device_batch_size: PositiveInt
+    seed: PositiveInt
 
 
 class AppConfig(BaseModel):

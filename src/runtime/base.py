@@ -1,5 +1,13 @@
 from abc import ABC, abstractmethod
 
+ReduceOp = Literal["mean", "max", "none"]
+
+
+@dataclass(frozen=True)
+class ScalarMetric:
+    value: float
+    reduce: ReduceOp = "mean"
+
 
 class Runtime(ABC):
     def __init__(self, cfg):
@@ -14,7 +22,7 @@ class Runtime(ABC):
         pass
 
     @abstractmethod
-    def log(self, step, values_to_log):
+    def log(self, step: int, values_to_log: dict[str, ScalarMetric]):
         pass
 
     @abstractmethod

@@ -12,6 +12,7 @@ from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.optim import setup_optimizer
 from src.runtime import DDPRuntimeRef, SingleDeviceRuntime
+from src.runtime.base import ScalarMetric
 from src.utils import load_run_config, normalize_config_arg, seed_everything, setup_logging
 
 logger = logging.getLogger(__name__)
@@ -80,17 +81,22 @@ def main() -> None:
         if hasattr(train_loader.sampler, "set_epoch"):
             train_loader.sampler.set_epoch(0)
 
-        prev_time = time.perf_counter()
-
+        step_start_time = time.perf_counter()
         for x, y in train_loader:
+            # move data to device
             x = x.to(runtime.device)
             y = y.to(runtime.device)
+
+            # forward pass
             logits = model(x)
+
+            # compute loss
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
 
             if runtime.is_main_process():
                 logger.info("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
 
+            # backward pass
             optimizer.zero_grad()
             runtime.backward(loss)
             runtime.finalize_backward()
@@ -107,26 +113,29 @@ def main() -> None:
 
             iter -= 1
 
-            elapsed_time = time.perf_counter() - prev_time
-            prev_time = elapsed_time
+            train_step_time = time.perf_counter() - step_start_time
+            tokens = (step + 1) * runtime.tokens_per_step
 
             runtime.log(
                 step,
                 {
-                    "stats/elapsed_time_per_step": elapsed_time,
-                    "stats/tokens_per_step": runtime.tokens_per_step,
-                    "train/loss": loss.item(),
-                    "train/grad_norm": total_grad_norm,
+                    "stats/tokens": ScalarMetric(tokens, reduce="none"),
+                    "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
+                    "train/loss": ScalarMetric(loss.item(), reduce="mean"),
+                    "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
                 },
             )
 
             if iter == 0:
                 break
 
-            if (step + 1) % cfg.trainer.eval_every_step == 0:
+            if cfg.trainer.eval_every_step != -1 and (
+                cfg.trainer.eval_every_step == 0 or (step + 1) % cfg.trainer.eval_every_step == 0
+            ):
                 model.eval()
                 total_loss = 0.0
                 num_val_batches = 0
+                val_start_time = time.perf_counter()
 
                 with torch.no_grad():
                     for val_x, val_y in val_loader:
@@ -141,13 +150,21 @@ def main() -> None:
                         total_loss += loss.item()
                         num_val_batches += 1
 
-                model.train()
+                val_time = time.perf_counter() - val_start_time
                 val_loss = total_loss / num_val_batches
                 if runtime.is_main_process():
                     logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
-                runtime.log(step, {"val/loss": val_loss})  # TODO: I should log reduced scalars
+                runtime.log(
+                    step,
+                    {
+                        "val/loss": ScalarMetric(val_loss, reduce="mean"),
+                        "val/time": ScalarMetric(val_time, reduce="max"),
+                    },
+                )
+                model.train()
 
             step += 1
+            step_start_time = time.perf_counter()
     finally:
         runtime.cleanup()
 
