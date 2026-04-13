@@ -1,4 +1,4 @@
-run_name = "testing_out_ddp1"
+run_name = "testing_out_single_gpu"
 
 [model]
 vocab_size = 50257

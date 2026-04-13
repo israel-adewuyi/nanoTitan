@@ -56,5 +56,9 @@ class SingleDeviceRuntime(Runtime):
     def finalize_backward(self):
         pass
 
+    @property
+    def tokens_per_step(self):
+        return self.cfg.trainer.per_device_batch_size * self.cfg.model.max_seq_len
+
     def cleanup(self):
         self.metrics_logger.close()

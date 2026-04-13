@@ -1,4 +1,4 @@
-run_name = "testing_out_ddp1"
+run_name = "ddp_reference"
 
 [model]
 vocab_size = 50257
