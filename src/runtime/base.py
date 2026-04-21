@@ -1,6 +1,7 @@
-from typing import Literal
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
 
 ReduceOp = Literal["mean", "max", "none"]
 
@@ -14,13 +15,14 @@ class ScalarMetric:
 class Runtime(ABC):
     def __init__(self, cfg):
         self.cfg = cfg
+        self.log_dir: Path | None = None
 
     @abstractmethod
     def setup(self):
         pass
 
     @abstractmethod
-    def prepare_model(self):
+    def prepare_model(self, model):
         pass
 
     @abstractmethod
@@ -44,5 +46,14 @@ class Runtime(ABC):
         pass
 
     @abstractmethod
+    def is_main_process(self):
+        pass
+
+    @abstractmethod
     def cleanup(self):
         pass
+
+    def get_profiler_trace_dir(self) -> Path | None:
+        if self.log_dir is None or not self.is_main_process():
+            return None
+        return self.log_dir / "profiler"

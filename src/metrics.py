@@ -1,11 +1,13 @@
 import json
+from pathlib import Path
 
 from torch.utils.tensorboard import SummaryWriter
 
 
 class MetricsLogger:
     def __init__(self, log_dir: str):
-        self.writer = SummaryWriter(log_dir=log_dir)
+        self.log_dir = Path(log_dir)
+        self.writer = SummaryWriter(log_dir=str(self.log_dir))
 
     def log(self, step: int, metrics: dict[str, float]) -> None:
         for name, value in metrics.items():

@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -11,16 +12,18 @@ from src.dist_env import (
     init_distributed,
     is_main_process,
 )
+from src.model import NanoTitanModel
 from src.runtime.base import Runtime
 from src.runtime.reducer import ReducerV0
 from src.utils import setup_tensorboard
 
 
-class MiniDDP(Runtime):
-    """Mini-DDP Implementation"""
+class DDPRuntime(Runtime):
+    """Mini-DDP implementation"""
 
     def __init__(self, cfg):
         super().__init__(cfg)
+        self.setup()
 
     def setup(self):
         init_distributed()
@@ -31,6 +34,7 @@ class MiniDDP(Runtime):
 
         if is_main_process():
             self.metrics_logger = setup_tensorboard(self.cfg.run_name)
+            self.log_dir = self.metrics_logger.log_dir
             self.metrics_logger.log_config(self.cfg.model_dump())
 
     def prepare_model(self, model: NanoTitanModel):
@@ -94,13 +98,20 @@ class MiniDDP(Runtime):
     def backward(self, loss):
         loss.backward()
 
-    def is_main_process():
+    def is_main_process(self):
         return is_main_process()
 
     def finalize_backward(self):
         pass
 
+    @property
+    def tokens_per_step(self):
+        return self.cfg.trainer.per_device_batch_size * self.cfg.model.max_seq_len * self.world_size
+
     def cleanup(self):
         if is_main_process():
             self.metrics_logger.close()
         cleanup()
+
+
+MiniDDP = DDPRuntime

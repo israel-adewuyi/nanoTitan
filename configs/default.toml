@@ -10,6 +10,7 @@ n_heads = 8
 ffn_in = 128
 
 [trainer]
+seed = 42
 device_id = 3
 eval_every_step = 500
 per_device_batch_size = 2
@@ -25,3 +26,13 @@ lr = "1e-3"
 
 [runtime]
 name = "ddp_reference"
+
+[profiler]
+enabled = false
+wait_steps = 2
+warmup_steps = 2
+active_steps = 6
+record_shapes = true
+profile_memory = true
+with_stack = false
+with_flops = false
