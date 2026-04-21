@@ -25,4 +25,14 @@ type = "adam"
 lr = "1e-3"
 
 [runtime]
-name = "ddp_reference"
+name = "ddp"
+
+[profiler]
+enabled = false
+wait_steps = 2
+warmup_steps = 2
+active_steps = 6
+record_shapes = true
+profile_memory = true
+with_stack = false
+with_flops = false

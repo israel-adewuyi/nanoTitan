@@ -11,7 +11,8 @@ from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.optim import setup_optimizer
-from src.runtime import DDPRuntimeRef, SingleDeviceRuntime
+from src.profiler import build_profiler
+from src.runtime import DDPRuntime, DDPRuntimeRef, SingleDeviceRuntime
 from src.runtime.base import ScalarMetric
 from src.utils import load_run_config, normalize_config_arg, seed_everything, setup_logging
 
@@ -39,6 +40,8 @@ def build_runtime(cfg: AppConfig):
         return SingleDeviceRuntime(cfg)
     elif cfg.runtime.name == "ddp_reference":
         return DDPRuntimeRef(cfg)
+    elif cfg.runtime.name == "ddp":
+        return DDPRuntime(cfg)
     else:
         raise ValueError(f"Runtime of name {cfg.runtime.name} hasn't been implemented yet.")
 
@@ -75,96 +78,100 @@ def main() -> None:
 
     iter = 1000
     num_batches = len(train_loader)
+    profiler = build_profiler(runtime, cfg.profiler)
 
     step = 0
     try:
         if hasattr(train_loader.sampler, "set_epoch"):
             train_loader.sampler.set_epoch(0)
 
-        step_start_time = time.perf_counter()
-        for x, y in train_loader:
-            # move data to device
-            x = x.to(runtime.device)
-            y = y.to(runtime.device)
+        with profiler as prof:
+            step_start_time = time.perf_counter()
+            for x, y in train_loader:
+                # move data to device
+                x = x.to(runtime.device)
+                y = y.to(runtime.device)
 
-            # forward pass
-            logits = model(x)
+                # forward pass
+                logits = model(x)
 
-            # compute loss
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
+                # compute loss
+                loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
 
-            if runtime.is_main_process():
-                logger.info("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
-
-            # backward pass
-            optimizer.zero_grad()
-            runtime.backward(loss)
-            runtime.finalize_backward()
-
-            total_grad_norm_sq = 0.0
-            for param in model.parameters():
-                if param.grad is None:
-                    continue
-                grad_norm = param.grad.detach().norm(2)
-                total_grad_norm_sq += grad_norm.item() ** 2
-            total_grad_norm = total_grad_norm_sq**0.5
-
-            optimizer.step()
-
-            iter -= 1
-
-            train_step_time = time.perf_counter() - step_start_time
-            tokens = (step + 1) * runtime.tokens_per_step
-
-            runtime.log(
-                step,
-                {
-                    "stats/tokens": ScalarMetric(tokens, reduce="none"),
-                    "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
-                    "train/loss": ScalarMetric(loss.item(), reduce="mean"),
-                    "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
-                },
-            )
-
-            if iter == 0:
-                break
-
-            if cfg.trainer.eval_every_step != -1 and (
-                cfg.trainer.eval_every_step == 0 or (step + 1) % cfg.trainer.eval_every_step == 0
-            ):
-                model.eval()
-                total_loss = 0.0
-                num_val_batches = 0
-                val_start_time = time.perf_counter()
-
-                with torch.no_grad():
-                    for val_x, val_y in val_loader:
-                        val_x = val_x.to(runtime.device)
-                        val_y = val_y.to(runtime.device)
-
-                        logits = model(val_x)
-                        loss = F.cross_entropy(
-                            logits.reshape(-1, logits.size(-1)), val_y.reshape(-1)
-                        )
-
-                        total_loss += loss.item()
-                        num_val_batches += 1
-
-                val_time = time.perf_counter() - val_start_time
-                val_loss = total_loss / num_val_batches
                 if runtime.is_main_process():
-                    logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
+                    logger.info("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
+
+                # backward pass
+                optimizer.zero_grad()
+                runtime.backward(loss)
+                runtime.finalize_backward()
+
+                total_grad_norm_sq = 0.0
+                for param in model.parameters():
+                    if param.grad is None:
+                        continue
+                    grad_norm = param.grad.detach().norm(2)
+                    total_grad_norm_sq += grad_norm.item() ** 2
+                total_grad_norm = total_grad_norm_sq**0.5
+
+                optimizer.step()
+
+                iter -= 1
+
+                train_step_time = time.perf_counter() - step_start_time
+                tokens = (step + 1) * runtime.tokens_per_step
+
                 runtime.log(
                     step,
                     {
-                        "val/loss": ScalarMetric(val_loss, reduce="mean"),
-                        "val/time": ScalarMetric(val_time, reduce="max"),
+                        "stats/tokens": ScalarMetric(tokens, reduce="none"),
+                        "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
+                        "train/loss": ScalarMetric(loss.item(), reduce="mean"),
+                        "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
                     },
                 )
-                model.train()
+                prof.step()
 
-            step += 1
-            step_start_time = time.perf_counter()
+                if iter == 0:
+                    break
+
+                if cfg.trainer.eval_every_step != -1 and (
+                    cfg.trainer.eval_every_step == 0
+                    or (step + 1) % cfg.trainer.eval_every_step == 0
+                ):
+                    model.eval()
+                    total_loss = 0.0
+                    num_val_batches = 0
+                    val_start_time = time.perf_counter()
+
+                    with torch.no_grad():
+                        for val_x, val_y in val_loader:
+                            val_x = val_x.to(runtime.device)
+                            val_y = val_y.to(runtime.device)
+
+                            logits = model(val_x)
+                            loss = F.cross_entropy(
+                                logits.reshape(-1, logits.size(-1)), val_y.reshape(-1)
+                            )
+
+                            total_loss += loss.item()
+                            num_val_batches += 1
+
+                    val_time = time.perf_counter() - val_start_time
+                    val_loss = total_loss / num_val_batches
+                    if runtime.is_main_process():
+                        logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
+                    runtime.log(
+                        step,
+                        {
+                            "val/loss": ScalarMetric(val_loss, reduce="mean"),
+                            "val/time": ScalarMetric(val_time, reduce="max"),
+                        },
+                    )
+                    model.train()
+
+                step += 1
+                step_start_time = time.perf_counter()
     finally:
         runtime.cleanup()
 

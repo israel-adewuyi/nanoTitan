@@ -1,10 +1,9 @@
-import torch
 from torch.utils.data import DataLoader
 
 from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.runtime.base import Runtime, ScalarMetric
-from src.utils import setup_tensorboard
+from src.utils import resolve_device, setup_tensorboard
 
 
 class SingleDeviceRuntime(Runtime):
@@ -15,9 +14,9 @@ class SingleDeviceRuntime(Runtime):
         self.setup()
 
     def setup(self):
-        # TODO: Think on who sets this. Config?
-        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = resolve_device(self.cfg.trainer.device_id)
         self.metrics_logger = setup_tensorboard(self.cfg.run_name)
+        self.log_dir = self.metrics_logger.log_dir
         self.metrics_logger.log_config(self.cfg.model_dump())
 
     def log(self, step: int, values_to_log: dict[str, ScalarMetric]) -> None:

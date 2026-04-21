@@ -43,6 +43,25 @@ class RuntimeConfig(BaseModel):
     # Literal[single, ddp_reference, ddp]
 
 
+class ProfilerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    wait_steps: NonNegativeInt = 2
+    warmup_steps: NonNegativeInt = 2
+    active_steps: NonNegativeInt = 6
+    record_shapes: bool = True
+    profile_memory: bool = True
+    with_stack: bool = False
+    with_flops: bool = False
+
+    @model_validator(mode="after")
+    def validate_active_steps(self) -> ProfilerConfig:
+        if self.enabled and self.active_steps == 0:
+            raise ValueError("profiler.active_steps must be positive when profiler.enabled=true")
+        return self
+
+
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -84,6 +103,7 @@ class AppConfig(BaseModel):
     data: DataConfig
     optim: OptimizerConfig
     runtime: RuntimeConfig
+    profiler: ProfilerConfig = Field(default_factory=ProfilerConfig)
 
 
 def resolve_config_path(path: str | Path) -> Path:
