@@ -86,6 +86,13 @@ class MultiHeadAttention(nn.Module):
         nn.init.xavier_uniform_(self.W_K)
         nn.init.xavier_uniform_(self.W_V)
         nn.init.xavier_uniform_(self.W_O)
+        
+        # Register mask. This implementation assumes that all residual streams have the same sequence length
+        mask = torch.tril(
+            torch.ones(
+                self.cfg.max_seq_len, self.cfg.max_seq_len, dtype=torch.bool
+            ))[None, None, :, :]
+        self.register_buffer("mask", mask)
 
     def forward(
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
@@ -124,15 +131,12 @@ class MultiHeadAttention(nn.Module):
             n_heads=self.cfg.n_heads,
             d_head=self.cfg.d_head,
         )
-        mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool))[None, None, :, :].to(
-            x.device
-        )
         attn_scores = einops.einsum(
             Q,
             K,
             "batch seq_Q n_heads d_head, batch seq_K n_heads d_head -> batch n_heads seq_Q seq_K",
         ) / math.sqrt(self.cfg.d_head)
-        masked_attn_scores = attn_scores.masked_fill(mask == 0, float("-inf"))
+        masked_attn_scores = attn_scores.masked_fill(self.mask == 0, float("-inf"))
         attn_pattern = torch.softmax(masked_attn_scores, dim=-1)
         attn_out = einops.einsum(
             attn_pattern,
