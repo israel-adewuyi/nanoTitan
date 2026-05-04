@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import torch
 import torch.nn as nn
 from jaxtyping import Float
 
@@ -17,6 +20,7 @@ class PipelineStageModel(nn.Module):
         end_idx: int,
         device: str,
     ):
+        super().__init__()
         self.model = model
         self.rank = rank
         self.device = device
@@ -24,7 +28,7 @@ class PipelineStageModel(nn.Module):
         self.start_idx = start_idx
         self.end_idx = end_idx
 
-    self.partition_params()
+        self.partition_params()
 
     def partition_params(self):
         self.stage = nn.ModuleList()
@@ -40,8 +44,8 @@ class PipelineStageModel(nn.Module):
                 self.stage.append(self.model.layers[layer].to(self.device))
 
     def forward(
-        self, x: torch.Tensor[Float, "batch seq_len ..."]
-    ) -> torch.Tensor[Float, "batch seq_len .."]:
+        self, x: torch.Tensor[Float, "batch seq_len"]
+    ) -> torch.Tensor[Float, "batch seq_len"]:
         # forward pass on the specific stage each device is holding
         if is_main_process():
             token_embed = self.token_embed(x)
@@ -52,3 +56,5 @@ class PipelineStageModel(nn.Module):
 
         if is_main_process():
             x = self.token_embed.project(x)
+
+        return x
