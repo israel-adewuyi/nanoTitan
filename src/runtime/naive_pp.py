@@ -25,7 +25,7 @@ class NaivePipelineParallel(Runtime):
             self.metrics_logger.log_config(self.cfg.model_dump())
 
     def get_rank_bounds(self):
-        per_rank_layers = self.cfg.model.n_layers / self.world_size
+        per_rank_layers = self.cfg.model.n_layers // self.world_size
         start_idx = self.rank * per_rank_layers
         end_idx = self.rank * per_rank_layers + per_rank_layers
         return (start_idx, end_idx)
@@ -37,7 +37,7 @@ class NaivePipelineParallel(Runtime):
 
         self.start_idx, self.end_idx = self.get_rank_bounds()
         for layer in range(self.cfg.model.n_layers):
-            if layer >= self.start_idx and layer <= self.end_idx:
+            if layer >= self.start_idx and layer < self.end_idx:
                 model.layer[layer].to(self.device)
 
         if is_main_process():
