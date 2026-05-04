@@ -1,15 +1,21 @@
 import torch
 
-from src.dist_env import get_local_rank, get_rank, get_world_size, init_distributed
+from src.dist_env import get_local_rank, get_rank, get_world_size, init_distributed, is_main_process, cleanup
+#TODO: two is_main_process is bad code broo.
 from src.runtime.base import Runtime
+from src.model import NanoTitanModel
 from src.utils import setup_tensorboard
+from src.data.dataset import PackedTokenDataset
+
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 
 class NaivePipelineParallel(Runtime):
     """Naive pipeline parallelism implementation"""
 
     def __init__(self, cfg):
-        super().__init(cfg)
+        super().__init__(cfg)
         self.setup()
 
     def setup(self):
@@ -19,7 +25,7 @@ class NaivePipelineParallel(Runtime):
         self.local_rank = get_local_rank()
         self.device = torch.device(f"cuda:{self.local_rank}")
 
-        if is_main_process():
+        if self.is_main_process():
             self.metrics_logger = setup_tensorboard(self.cfg.run_name)
             self.log_dir = self.metrics_logger.log_dir
             self.metrics_logger.log_config(self.cfg.model_dump())
@@ -38,10 +44,11 @@ class NaivePipelineParallel(Runtime):
         self.start_idx, self.end_idx = self.get_rank_bounds()
         for layer in range(self.cfg.model.n_layers):
             if layer >= self.start_idx and layer < self.end_idx:
-                model.layer[layer].to(self.device)
+                model.layers[layer].to(self.device)
 
-        if is_main_process():
+        if self.is_main_process():
             model.token_embed.to(self.device)
+            model.position_embed.to(self.device)
 
         # for layer in range(self.cfg.n_layers):
         #     model.layers[layer].to(f"cuda:{GPU_IDS[layer]}")
