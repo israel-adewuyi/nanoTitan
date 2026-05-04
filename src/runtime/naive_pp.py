@@ -1,14 +1,22 @@
 import torch
-
-from src.dist_env import get_local_rank, get_rank, get_world_size, init_distributed, is_main_process, cleanup
-#TODO: two is_main_process is bad code broo.
-from src.runtime.base import Runtime
-from src.model import NanoTitanModel
-from src.utils import setup_tensorboard
-from src.data.dataset import PackedTokenDataset
-
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
+
+from src.data.dataset import PackedTokenDataset
+from src.dist_env import (
+    cleanup,
+    get_local_rank,
+    get_rank,
+    get_world_size,
+    init_distributed,
+    is_main_process,
+)
+from src.model import NanoTitanModel
+from src.pipeline_model import PipelineStageModel
+
+# TODO: two is_main_process is bad code broo.
+from src.runtime.base import Runtime
+from src.utils import setup_tensorboard
 
 
 class NaivePipelineParallel(Runtime):
@@ -36,27 +44,47 @@ class NaivePipelineParallel(Runtime):
         end_idx = self.rank * per_rank_layers + per_rank_layers
         return (start_idx, end_idx)
 
-    def model_partition(self, model: NanoTitanModel):
+    # def model_partition(self, model: NanoTitanModel):
+    #     assert self.cfg.model.n_layers % self.world_size == 0, (
+    #         "The number of GPUs should be divisible by the number of layers of the model"
+    #     )
+
+    #     return PipelineStageModel()
+
+    #     self.start_idx, self.end_idx = self.get_rank_bounds()
+    #     for layer in range(self.cfg.model.n_layers):
+    #         if layer >= self.start_idx and layer < self.end_idx:
+    #             model.layers[layer].to(self.device)
+    #             self._modules.append(model.layers[layer])
+
+    #     if self.is_main_process():
+    #         model.token_embed.to(self.device)
+    #         model.position_embed.to(self.device)\
+    #         self._modules.append(model.token_embed)
+    #         self._modules.append(models.position_embed)
+
+    # #TODO: Problem now is that I am copying all the tensors sto the _modules list.
+
+    #     # for layer in range(self.cfg.n_layers):
+    #     #     model.layers[layer].to(f"cuda:{GPU_IDS[layer]}")
+
+    #     return model
+
+    def prepare_model(self, model: NanoTitanModel):
         assert self.cfg.model.n_layers % self.world_size == 0, (
             "The number of GPUs should be divisible by the number of layers of the model"
         )
 
         self.start_idx, self.end_idx = self.get_rank_bounds()
-        for layer in range(self.cfg.model.n_layers):
-            if layer >= self.start_idx and layer < self.end_idx:
-                model.layers[layer].to(self.device)
 
-        if self.is_main_process():
-            model.token_embed.to(self.device)
-            model.position_embed.to(self.device)
-
-        # for layer in range(self.cfg.n_layers):
-        #     model.layers[layer].to(f"cuda:{GPU_IDS[layer]}")
-
-        return model
-
-    def prepare_model(self, model: NanoTitanModel):
-        return self.model_partition(model)
+        return PipelineStageModel(
+            model=model,
+            rank=self.rank,
+            cfg=self.cfg,
+            start_idx=self.start_idx,
+            end_idx=self.end_idx,
+            device=self.device,
+        )
 
     # TODO: Blind copying the dataset fn from ddp. Will have to fix later.
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
