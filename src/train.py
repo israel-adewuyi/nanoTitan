@@ -90,7 +90,7 @@ def main() -> None:
         with profiler as prof:
             step_start_time = time.perf_counter()
             for x, y in train_loader:
-                if runtime.name == "naive_pp":
+                if cfg.runtime.name == "naive_pp":
                     loss = runtime.train_step(model, (x, y), None)
 
                     if runtime.is_last_rank:

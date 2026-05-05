@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -76,9 +77,10 @@ class NaivePipelineParallel(Runtime):
                     self.cfg.trainer.per_device_batch_size,
                     self.cfg.model.max_seq_len,
                     self.cfg.model.d_model,
-                )
+                ),
+                device=self.device,
             )
-            dist.recv(tensor, self.prev_rank)
+            dist.recv(x, self.prev_rank)
 
         x = model(x)
 
@@ -86,9 +88,11 @@ class NaivePipelineParallel(Runtime):
             # compute loss here
             y = y.to(self.device)
             loss = F.cross_entropy(x.reshape(-1, x.size(-1)), y.reshape(-1))
-            return loss, {"train/loss": loss.item()}
+            return loss
         else:
             dist.send(x, self.next_rank)
+
+        return None
 
     # TODO: Blind copying the dataset fn from ddp. Will have to fix later.
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):

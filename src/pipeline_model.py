@@ -51,7 +51,7 @@ class PipelineStageModel(nn.Module):
         for layer in self.stage:
             x = layer(x)
 
-        if is_main_process():
-            x = self.token_embed.project(x)
+        # if is_main_process():
+        #     x = self.token_embed.project(x)
 
         return x
