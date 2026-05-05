@@ -18,6 +18,8 @@ class PipelineStageModel(nn.Module):
         start_idx: int,
         end_idx: int,
         device: str,
+        is_first_stage: bool,
+        is_last_stage: bool,
     ):
         super().__init__()
         self.model = model
@@ -26,13 +28,15 @@ class PipelineStageModel(nn.Module):
         self.cfg = cfg
         self.start_idx = start_idx
         self.end_idx = end_idx
+        self.is_first_stage = is_first_stage
+        self.is_last_stage = is_last_stage
 
         self.partition_params()
 
     def partition_params(self):
         self.stage = nn.ModuleList()
 
-        if is_main_process():
+        if self.is_first_stage:
             # rank 0 should hold the embedding layer and the pos embed layer
             self.token_embed = self.model.token_embed.to(self.device)
             self.pos_embed = self.model.position_embed.to(self.device)
@@ -41,17 +45,20 @@ class PipelineStageModel(nn.Module):
         for layer in range(self.cfg.model.n_layers):
             if layer >= self.start_idx and layer < self.end_idx:
                 self.stage.append(self.model.layers[layer].to(self.device))
+        
+        if self.is_last_stage:
+            self.token_embed = self.model.token_embed.to(self.device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # forward pass on the specific stage each device is holding
-        if is_main_process():
+        if self.is_first_stage:
             token_embed = self.token_embed(x)
             x = token_embed + self.pos_embed(x)
 
         for layer in self.stage:
             x = layer(x)
 
-        # if is_main_process():
-        #     x = self.token_embed.project(x)
+        if self.is_last_stage:
+            x = self.token_embed.project(x)
 
         return x

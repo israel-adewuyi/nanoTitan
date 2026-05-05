@@ -64,6 +64,8 @@ class NaivePipelineParallel(Runtime):
             start_idx=self.start_idx,
             end_idx=self.end_idx,
             device=self.device,
+            is_first_stage=is_main_process(),
+            is_last_stage=self.is_last_rank,
         )
 
     def train_step(self, model, batch, optimizer):
@@ -100,7 +102,6 @@ class NaivePipelineParallel(Runtime):
             train_dataset,
             batch_size=self.cfg.trainer.per_device_batch_size,
             shuffle=False,
-            sampler=DistributedSampler(dataset=train_dataset, shuffle=True),
             num_workers=self.cfg.data.num_workers,
             pin_memory=True,
             drop_last=True,
@@ -112,10 +113,6 @@ class NaivePipelineParallel(Runtime):
             val_dataset,
             batch_size=self.cfg.trainer.per_device_batch_size,
             num_workers=self.cfg.data.num_workers,
-            sampler=DistributedSampler(
-                dataset=val_dataset,
-                shuffle=False,
-            ),
             pin_memory=True,
             drop_last=False,
         )
