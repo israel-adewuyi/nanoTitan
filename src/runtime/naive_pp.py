@@ -1,4 +1,5 @@
 import torch
+import logging
 import torch.distributed as dist
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -18,6 +19,9 @@ from src.pipeline_model import PipelineStageModel
 # TODO: two is_main_process is bad code broo.
 from src.runtime.base import Runtime
 from src.utils import setup_tensorboard
+
+
+logger = logging.getLogger(__name__)
 
 
 class NaivePipelineParallel(Runtime):
@@ -81,6 +85,7 @@ class NaivePipelineParallel(Runtime):
                 ),
                 device=self.device,
             )
+            logger.debug(f"At rank {self.rank}!!! Receiving activations from rank {self.prev_rank}")
             dist.recv(x, self.prev_rank)
 
         x = model(x)
@@ -91,7 +96,9 @@ class NaivePipelineParallel(Runtime):
             loss = F.cross_entropy(x.reshape(-1, x.size(-1)), y.reshape(-1))
             return loss
         else:
+            logger.debug(f"Sending activations from rank {self.rank} to rank {self.next_rank}")
             dist.send(x, self.next_rank)
+        
 
         return None
 
