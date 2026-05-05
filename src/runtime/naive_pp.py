@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -38,6 +39,10 @@ class NaivePipelineParallel(Runtime):
             self.log_dir = self.metrics_logger.log_dir
             self.metrics_logger.log_config(self.cfg.model_dump())
 
+        # For communication during fwd/bwd pass
+        self.prev_rank = self.rank - 1
+        self.next_rank = self.rank + 1
+
     def get_rank_bounds(self):
         per_rank_layers = self.cfg.model.n_layers // self.world_size
         start_idx = self.rank * per_rank_layers
@@ -59,6 +64,31 @@ class NaivePipelineParallel(Runtime):
             end_idx=self.end_idx,
             device=self.device,
         )
+
+    def train_step(self, model, batch, optimizer):
+        x, y = batch
+
+        if self.is_main_process():
+            x = x.to(self.device)
+        else:
+            x = torch.empty(
+                (
+                    self.cfg.trainer.per_device_batch_size,
+                    self.cfg.model.max_seq_len,
+                    self.cfg.model.d_model,
+                )
+            )
+            dist.recv(tensor, self.prev_rank)
+
+        x = model(x)
+
+        if self.is_last_rank:
+            # compute loss here
+            y = y.to(self.device)
+            loss = F.cross_entropy(x.reshape(-1, x.size(-1)), y.reshape(-1))
+            return loss, {"train/loss": loss.item()}
+        else:
+            dist.send(x, self.next_rank)
 
     # TODO: Blind copying the dataset fn from ddp. Will have to fix later.
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
@@ -128,3 +158,7 @@ class NaivePipelineParallel(Runtime):
 
     def is_main_process(self):
         return is_main_process()
+
+    @property
+    def is_last_rank(self):
+        return self.rank == self.world_size - 1

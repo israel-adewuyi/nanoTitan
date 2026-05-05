@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from jaxtyping import Float
 
 from src.dist_env import is_main_process
 from src.model import NanoTitanModel
@@ -43,9 +42,7 @@ class PipelineStageModel(nn.Module):
             if layer >= self.start_idx and layer < self.end_idx:
                 self.stage.append(self.model.layers[layer].to(self.device))
 
-    def forward(
-        self, x: torch.Tensor[Float, "batch seq_len"]
-    ) -> torch.Tensor[Float, "batch seq_len"]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # forward pass on the specific stage each device is holding
         if is_main_process():
             token_embed = self.token_embed(x)
