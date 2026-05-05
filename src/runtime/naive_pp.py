@@ -1,8 +1,7 @@
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import (
@@ -96,7 +95,7 @@ class NaivePipelineParallel(Runtime):
 
         return None
 
-    # TODO: Blind copying the dataset fn from ddp. Will have to fix later.
+    # TODO: Blind copying the dataset fn from ddp. Will have to fix later
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
         train_loader = DataLoader(
             train_dataset,

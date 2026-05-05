@@ -3,7 +3,6 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from src.dist_env import is_main_process
 from src.model import NanoTitanModel
 
 
@@ -22,7 +21,6 @@ class PipelineStageModel(nn.Module):
         is_last_stage: bool,
     ):
         super().__init__()
-        self.model = model
         self.rank = rank
         self.device = device
         self.cfg = cfg
@@ -31,9 +29,9 @@ class PipelineStageModel(nn.Module):
         self.is_first_stage = is_first_stage
         self.is_last_stage = is_last_stage
 
-        self.partition_params()
+        self.partition_params(model)
 
-    def partition_params(self):
+    def partition_params(self, model):
         self.stage = nn.ModuleList()
 
         if self.is_first_stage:
@@ -45,7 +43,7 @@ class PipelineStageModel(nn.Module):
         for layer in range(self.cfg.model.n_layers):
             if layer >= self.start_idx and layer < self.end_idx:
                 self.stage.append(self.model.layers[layer].to(self.device))
-        
+
         if self.is_last_stage:
             self.token_embed = self.model.token_embed.to(self.device)
 

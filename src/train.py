@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         help="Reserved training mode flag. The model wiring is identical for now.",
     )
     parser.add_argument(
+        "--log.level",
+        default="INFO",
+        dest="log_level",
+        help="Python logging level to use, e.g. DEBUG, INFO, WARNING.",
+    )
+    parser.add_argument(
         "config",
         help="TOML config path. Prefix with '@' to match the planned launcher style.",
     )
@@ -49,8 +55,8 @@ def build_runtime(cfg: AppConfig):
 
 
 def main() -> None:
-    setup_logging()
     args = parse_args()
+    setup_logging(args.log_level)
 
     # get configs, setup runtime, seed everything
     cfg = load_run_config(args.config)
