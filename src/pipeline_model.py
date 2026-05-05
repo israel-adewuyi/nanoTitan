@@ -36,16 +36,16 @@ class PipelineStageModel(nn.Module):
 
         if self.is_first_stage:
             # rank 0 should hold the embedding layer and the pos embed layer
-            self.token_embed = self.model.token_embed.to(self.device)
-            self.pos_embed = self.model.position_embed.to(self.device)
+            self.token_embed = model.token_embed.to(self.device)
+            self.pos_embed = model.position_embed.to(self.device)
 
         # each device holds a subset of layers in the model
         for layer in range(self.cfg.model.n_layers):
             if layer >= self.start_idx and layer < self.end_idx:
-                self.stage.append(self.model.layers[layer].to(self.device))
+                self.stage.append(model.layers[layer].to(self.device))
 
         if self.is_last_stage:
-            self.token_embed = self.model.token_embed.to(self.device)
+            self.token_embed = model.token_embed.to(self.device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # forward pass on the specific stage each device is holding
