@@ -90,6 +90,14 @@ def main() -> None:
         with profiler as prof:
             step_start_time = time.perf_counter()
             for x, y in train_loader:
+                if runtime.name == "naive_pp":
+                    loss = runtime.train_step(model, (x, y), None)
+
+                    if runtime.is_last_rank:
+                        # temp fix, for debugging
+                        print("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
+
+                    continue
                 # move data to device
                 x = x.to(runtime.device)
                 y = y.to(runtime.device)
