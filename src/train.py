@@ -101,7 +101,7 @@ def main() -> None:
 
                     if runtime.is_last_rank:
                         # temp fix, for debugging
-                        print("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
+                        logger.debug("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
 
                     continue
                 # move data to device
