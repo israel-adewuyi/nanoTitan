@@ -1,5 +1,6 @@
-import torch
 import logging
+
+import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -19,7 +20,6 @@ from src.pipeline_model import PipelineStageModel
 # TODO: two is_main_process is bad code broo.
 from src.runtime.base import Runtime
 from src.utils import setup_tensorboard
-
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,6 @@ class NaivePipelineParallel(Runtime):
         else:
             logger.debug(f"Sending activations from rank {self.rank} to rank {self.next_rank}")
             dist.send(x, self.next_rank)
-        
 
         return None
 
@@ -152,8 +151,25 @@ class NaivePipelineParallel(Runtime):
 
         return value.item()
 
-    def backward(self, loss):
-        loss.backward()
+    def backward(self, loss, model):
+        if self.rank == self.world_size - 1:
+            loss.backward()
+        else:
+            out_acts = model.get_outgoing_acts()
+            out_acts_grad = torch.empty(
+                (
+                    self.cfg.trainer.per_device_batch_size,
+                    self.cfg.model.max_seq_len,
+                    self.cfg.model.d_model,
+                ),
+                device=self.device,
+            )
+            dist.recv(out_acts_grad, self.next_rank)
+            out_acts.backward(out_acts_grad)
+
+        # incoming.backward()
+        if not self.is_main_process():
+            dist.send(model.get_incoming_acts_grad(), self.prev_rank)
 
     def finalize_backward(self):
         pass

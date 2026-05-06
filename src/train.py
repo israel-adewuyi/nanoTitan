@@ -98,11 +98,10 @@ def main() -> None:
             for x, y in train_loader:
                 if cfg.runtime.name == "naive_pp":
                     loss = runtime.train_step(model, (x, y), None)
-
                     if runtime.is_last_rank:
                         # temp fix, for debugging
                         print("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
-
+                    runtime.backward(loss, model)
                     continue
                 # move data to device
                 x = x.to(runtime.device)
