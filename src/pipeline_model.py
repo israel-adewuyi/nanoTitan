@@ -49,6 +49,10 @@ class PipelineStageModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # forward pass on the specific stage each device is holding
+        if not self.is_first_stage:
+            self.stage_input = x
+            self.stage_input.requires_grad_()
+
         if self.is_first_stage:
             token_embed = self.token_embed(x)
             x = token_embed + self.pos_embed(x)
@@ -59,4 +63,12 @@ class PipelineStageModel(nn.Module):
         if self.is_last_stage:
             x = self.token_embed.project(x)
 
+        self.stage_out = x
+
         return x
+
+    def get_incoming_acts_grad(self):
+        return self.stage_input.grad
+
+    def get_outgoing_acts(self):
+        return self.stage_out
