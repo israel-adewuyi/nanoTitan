@@ -41,6 +41,9 @@ class RuntimeConfig(BaseModel):
 
     name: str
     # Literal[single, ddp_reference, ddp]
+    reducer: str
+    # if ddp, options are v0 or v1
+    bucket_size: int
 
 
 class ProfilerConfig(BaseModel):
@@ -105,7 +108,7 @@ class AppConfig(BaseModel):
     runtime: RuntimeConfig
     profiler: ProfilerConfig = Field(default_factory=ProfilerConfig)
 
-    track_backward_time: bool
+    track_backward_time: bool = False
 
 
 def resolve_config_path(path: str | Path) -> Path:
