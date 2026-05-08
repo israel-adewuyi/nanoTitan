@@ -158,14 +158,21 @@ class FFN(nn.Module):
         super().__init__()
         self.cfg = cfg
 
-        self.W_in = nn.Linear(cfg.d_model, cfg.ffn_in)
+        # SwiGLU uses two parallel input projections
+        self.W_gate = nn.Linear(cfg.d_model, cfg.ffn_in)
+        self.W_val = nn.Linear(cfg.d_model, cfg.ffn_in)
         self.W_out = nn.Linear(cfg.ffn_in, cfg.d_model)
-        self.ReLU = nn.ReLU()
+        self.silu = nn.SiLU()
 
     def forward(
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
     ) -> torch.Tensor[Float, "batch seq_len d_model"]:
-        return self.W_out(self.ReLU(self.W_in(x)))
+        # SwiGLU: silu(gate) * value
+        gate = self.silu(self.W_gate(x))
+        value = self.W_val(x)
+        ffn_out = gate * value  # element-wise multiplication
+        
+        return self.W_out(ffn_out)
 
 
 class TransformerLayer(nn.Module):
