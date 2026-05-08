@@ -42,7 +42,7 @@ class DDPRuntime(Runtime):
         if self.cfg.runtime.reducer == "v0":
             self.reducer = ReducerV0(model, self.world_size)
         else:
-            self.reducer = ReducerV1(model, self.world_size, self.config.runtime.bucket_size)
+            self.reducer = ReducerV1(model, self.world_size, self.cfg.runtime.bucket_size)
         return model
 
     def log(self, step: int, values_to_log: dict[str, float]) -> None:
