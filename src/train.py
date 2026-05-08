@@ -118,8 +118,17 @@ def main() -> None:
 
                 # backward pass
                 optimizer.zero_grad()
+
+                if cfg.track_backward_time:
+                    torch.cuda.synchronize(runtime.device)
+                    backward_start_time = time.perf_counter()
+
                 runtime.backward(loss)
                 runtime.finalize_backward()
+
+                if cfg.track_backward_time:
+                    torch.cuda.synchronize(runtime.device)
+                    backward_time = time.perf_counter() - backward_start_time
 
                 total_grad_norm_sq = 0.0
                 for param in model.parameters():
@@ -138,15 +147,18 @@ def main() -> None:
                 train_step_time = time.perf_counter() - step_start_time
                 tokens = (step + 1) * runtime.tokens_per_step
 
-                runtime.log(
-                    step,
-                    {
-                        "stats/tokens": ScalarMetric(tokens, reduce="none"),
-                        "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
-                        "train/loss": ScalarMetric(loss.item(), reduce="mean"),
-                        "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
-                    },
-                )
+                metrics = {
+                    "stats/tokens": ScalarMetric(tokens, reduce="none"),
+                    "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
+                    "train/loss": ScalarMetric(loss.item(), reduce="mean"),
+                    "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
+                }
+
+                if cfg.track_backward_time:
+                    metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
+
+                runtime.log(step, metrics)
+
                 prof.step()
 
                 if iter == 0:
