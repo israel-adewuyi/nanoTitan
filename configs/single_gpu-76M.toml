@@ -1,0 +1,38 @@
+run_name = "single_gpu_76M_batch_size=32_seq_len=768_steps=1000_lr=1e-4+swiglu"
+
+[model]
+vocab_size = 50257
+d_model = 512
+max_seq_len = 768
+n_layers = 16
+d_head = 32
+n_heads = 16
+ffn_in = 2048
+
+[trainer]
+seed = 42
+device_id = 0
+eval_every_step = -1
+per_device_batch_size = 32
+
+[data]
+train_tokens_path = "data/preprocessed/tinystories_train.bin"
+val_tokens_path = "data/preprocessed/tinystories_val.bin"
+num_workers = 4
+
+[optim]
+type = "adam"
+lr = "1e-4"
+
+[runtime]
+name = "single"
+
+[profiler]
+enabled = false
+wait_steps = 2
+warmup_steps = 2
+active_steps = 6
+record_shapes = true
+profile_memory = true
+with_stack = false
+with_flops = false
