@@ -129,6 +129,8 @@ def main() -> None:
                     total_grad_norm_sq += grad_norm.item() ** 2
                 total_grad_norm = total_grad_norm_sq**0.5
 
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+
                 optimizer.step()
 
                 iter -= 1
