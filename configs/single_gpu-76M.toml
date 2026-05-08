@@ -1,4 +1,5 @@
-run_name = "single_gpu_76M_batch_size=32_seq_len=768_steps=1000_lr=1e-4+swiglu"
+run_name = "single_gpu_92M_batch_size=40_seq_len=768_steps=6000_lr=5e-4+swiglu+weightdecay+grad_clip"
+track_backward_time = true
 
 [model]
 vocab_size = 50257
@@ -13,7 +14,7 @@ ffn_in = 2048
 seed = 42
 device_id = 0
 eval_every_step = -1
-per_device_batch_size = 32
+per_device_batch_size = 40
 
 [data]
 train_tokens_path = "data/preprocessed/tinystories_train.bin"
@@ -22,7 +23,7 @@ num_workers = 4
 
 [optim]
 type = "adam"
-lr = "1e-4"
+lr = "5e-4"
 
 [runtime]
 name = "single"

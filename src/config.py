@@ -105,7 +105,7 @@ class AppConfig(BaseModel):
     runtime: RuntimeConfig
     profiler: ProfilerConfig = Field(default_factory=ProfilerConfig)
 
-    track_backward_time: bool = False
+    track_backward_time: bool
 
 
 def resolve_config_path(path: str | Path) -> Path:
