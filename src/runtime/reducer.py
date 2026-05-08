@@ -106,7 +106,6 @@ class ReducerV1:
         temp_bucket["ready_count"] += 1
 
         if temp_bucket["ready_count"] == len(temp_bucket["params"]):
-            # TODO: I do not really understand intuitivelty the sync/async nature of allreduce. Should revisit.
             work = dist.all_reduce(temp_bucket["buffer"], op=dist.ReduceOp.SUM, async_op=True)
             temp_bucket["work"] = work
 
