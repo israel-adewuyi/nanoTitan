@@ -41,9 +41,9 @@ class RuntimeConfig(BaseModel):
 
     name: str
     # Literal[single, ddp_reference, ddp]
-    reducer: str
+    reducer: str = "v0"
     # if ddp, options are v0 or v1
-    bucket_size: int
+    bucket_size: int = 25
 
 
 class ProfilerConfig(BaseModel):

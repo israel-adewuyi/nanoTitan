@@ -9,7 +9,7 @@ class ReducerV0:
 
     def __init__(self, model: NanoTitanModel, world_size: int):
         self.world_size = world_size
-        self.params = [p for p in model.parameters() if p.requires_grad()]
+        self.params = [p for p in model.parameters() if p.requires_grad]
         self.hook_handles = []
 
         for p in self.params:
@@ -34,7 +34,7 @@ class ReducerV1:
 
     def __init__(self, model: NanoTitanModel, world_size: int, bucket_size: int):
         self.world_size = world_size
-        self.params = [p for p in model.parameters() if p.requires_grad()]
+        self.params = [p for p in model.parameters() if p.requires_grad]
         self.hook_handles = []
         self.bucket_size = bucket_size * 1024 * 1024
 

@@ -1,4 +1,5 @@
 import torch
+import logging
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
@@ -17,6 +18,8 @@ from src.model import NanoTitanModel
 from src.runtime.base import Runtime
 from src.utils import setup_tensorboard
 
+logger = logging.getLogger(__name__)
+
 
 class DDPRuntimeRef(Runtime):
     """Reference DDP Implementation with torch.nn.parallel.DistributedDataParallel"""
@@ -31,6 +34,7 @@ class DDPRuntimeRef(Runtime):
         self.rank = get_rank()
         self.local_rank = get_local_rank()
         self.device = torch.device(f"cuda:{self.local_rank}")
+        logger.debug(f"World size = {self.world_size}, rank = {self.rank}")
 
         if is_main_process():
             self.metrics_logger = setup_tensorboard(self.cfg.run_name)
