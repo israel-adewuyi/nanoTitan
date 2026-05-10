@@ -85,7 +85,6 @@ def main() -> None:
     optimizer = setup_optimizer(cfg.optim, model)
 
     iter = 1000
-    num_batches = len(train_loader)
     profiler = build_profiler(runtime, cfg.profiler)
 
     step = 0
@@ -96,51 +95,7 @@ def main() -> None:
         with profiler as prof:
             step_start_time = time.perf_counter()
             for x, y in train_loader:
-                if cfg.runtime.name == "naive_pp":
-                    loss = runtime.train_step(model, (x, y), None)
-                    if runtime.is_last_rank:
-                        # temp fix, for debugging
-                        logger.debug("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
-                    runtime.backward(loss, model)
-                    continue
-                # move data to device
-                x = x.to(runtime.device)
-                y = y.to(runtime.device)
-
-                # forward pass
-                logits = model(x)
-
-                # compute loss
-                loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
-
-                if runtime.is_main_process():
-                    logger.info("[Step %s/%s] Loss: %.6f", step, num_batches, loss.item())
-
-                # backward pass
-                optimizer.zero_grad()
-
-                if cfg.track_backward_time:
-                    torch.cuda.synchronize(runtime.device)
-                    backward_start_time = time.perf_counter()
-
-                runtime.backward(loss)
-                runtime.finalize_backward()
-
-                if cfg.track_backward_time:
-                    torch.cuda.synchronize(runtime.device)
-                    backward_time = time.perf_counter() - backward_start_time
-
-                total_grad_norm_sq = 0.0
-                for param in model.parameters():
-                    if param.grad is None:
-                        continue
-                    grad_norm = param.grad.detach().norm(2)
-                    total_grad_norm_sq += grad_norm.item() ** 2
-                total_grad_norm = total_grad_norm_sq**0.5
-
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
-
-                optimizer.step()
+                step_metrics = runtime.train_step(model, (x, y), optimizer)
 
                 iter -= 1
 
@@ -150,12 +105,9 @@ def main() -> None:
                 metrics = {
                     "stats/tokens": ScalarMetric(tokens, reduce="none"),
                     "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
-                    "train/loss": ScalarMetric(loss.item(), reduce="mean"),
-                    "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
                 }
 
-                if cfg.track_backward_time:
-                    metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
+                metrics.update(step_metrics)
 
                 runtime.log(step, metrics)
 

@@ -1,3 +1,7 @@
+import time
+
+import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.data.dataset import PackedTokenDataset
@@ -53,7 +57,53 @@ class SingleDeviceRuntime(Runtime):
         )
         return val_loader
 
-    def backward(self, loss):
+    def train_step(self, model, batch, optimizer):
+        x, y = batch
+        optimizer.zero_grad()
+        # move data to device
+        x = x.to(self.device)
+        y = y.to(self.device)
+
+        # forward pass
+        logits = model(x)
+
+        # compute loss
+        loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
+
+        if self.cfg.track_backward_time and self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        backward_start_time = time.perf_counter()
+
+        self.backward(loss, model)
+        self.finalize_backward()
+
+        if self.cfg.track_backward_time and self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        backward_time = time.perf_counter() - backward_start_time
+
+        total_grad_norm_sq = 0.0
+        for param in model.parameters():
+            if param.grad is None:
+                continue
+            grad_norm = param.grad.detach().norm(2)
+            total_grad_norm_sq += grad_norm.item() ** 2
+        total_grad_norm = total_grad_norm_sq**0.5
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+
+        optimizer.step()
+
+        metrics = {
+            "train/loss": ScalarMetric(loss.item(), reduce="mean"),
+            "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
+        }
+
+        if self.cfg.track_backward_time:
+            metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
+
+        return metrics
+
+    def backward(self, loss, model):
         loss.backward()
 
     def is_main_process(self):
