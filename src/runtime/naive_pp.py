@@ -176,7 +176,7 @@ class NaivePipelineParallel(Runtime):
         )
         return val_loader
 
-    def log(self, step: int, values_to_log: dict[str, float]) -> None:
+    def log(self, step: int, values_to_log: dict[str, float]) -> dict:
         reduced = {}
         for k, metric in values_to_log.items():
             reduced[k] = self.reduce_scalar(metric.value, metric.reduce)
@@ -189,7 +189,10 @@ class NaivePipelineParallel(Runtime):
         if grad_norm_sq is not None:
             reduced["train/grad_norm"] = math.sqrt(grad_norm_sq)
         if is_main_process():
+            if "train/loss" in reduced:
+                logger.info("[Step %s] Loss: %.6f", step, reduced["train/loss"])
             self.metrics_logger.log(step, reduced)
+        return reduced
 
     def reduce_scalar(self, value: float | int, reduce: str) -> float:
         value = torch.tensor([value], device=self.device, dtype=torch.float32)
