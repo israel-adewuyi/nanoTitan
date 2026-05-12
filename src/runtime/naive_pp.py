@@ -1,4 +1,6 @@
 import logging
+import math
+import time
 
 import torch
 import torch.distributed as dist
@@ -17,8 +19,8 @@ from src.dist_env import (
 from src.model import NanoTitanModel
 from src.pipeline_model import PipelineStageModel
 
-# TODO: two is_main_process is bad code broo.
-from src.runtime.base import Runtime
+# TODO: two is_main_process is bad code broo
+from src.runtime.base import Runtime, ScalarMetric
 from src.utils import setup_tensorboard
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,7 @@ class NaivePipelineParallel(Runtime):
         self.local_rank = get_local_rank()
         self.device = torch.device(f"cuda:{self.local_rank}")
 
-        if self.is_main_process():
+        if self.is_main_rank():
             self.metrics_logger = setup_tensorboard(self.cfg.run_name)
             self.log_dir = self.metrics_logger.log_dir
             self.metrics_logger.log_config(self.cfg.model_dump())
@@ -47,7 +49,11 @@ class NaivePipelineParallel(Runtime):
         self.prev_rank = self.rank - 1
         self.next_rank = self.rank + 1
 
+        # For tied embeddings
+        self.tie_embed_group = dist.new_group(ranks=[0, self.world_size - 1])
+
     def get_rank_bounds(self):
+        # return the layers that the current rank should process
         per_rank_layers = self.cfg.model.n_layers // self.world_size
         start_idx = self.rank * per_rank_layers
         end_idx = self.rank * per_rank_layers + per_rank_layers
@@ -60,6 +66,7 @@ class NaivePipelineParallel(Runtime):
 
         self.start_idx, self.end_idx = self.get_rank_bounds()
 
+        # instantiate a pipeline stage model with the exact layers / modules the current rank should process
         return PipelineStageModel(
             model=model,
             rank=self.rank,
@@ -73,8 +80,9 @@ class NaivePipelineParallel(Runtime):
 
     def train_step(self, model, batch, optimizer):
         x, y = batch
+        optimizer.zero_grad()
 
-        if self.is_main_process():
+        if self.is_main_rank():
             x = x.to(self.device)
         else:
             x = torch.empty(
@@ -89,17 +97,62 @@ class NaivePipelineParallel(Runtime):
             dist.recv(x, self.prev_rank)
 
         x = model(x)
+        loss, backward_time = None, None
 
         if self.is_last_rank:
             # compute loss here
             y = y.to(self.device)
             loss = F.cross_entropy(x.reshape(-1, x.size(-1)), y.reshape(-1))
-            return loss
         else:
             logger.debug(f"Sending activations from rank {self.rank} to rank {self.next_rank}")
             dist.send(x, self.next_rank)
 
-        return None
+        if self.cfg.track_backward_time:
+            torch.cuda.synchronize(self.device)
+            backward_start_time = time.perf_counter()
+
+        self.backward(loss, model)
+        self.finalize_backward()
+
+        if self.cfg.track_backward_time:
+            torch.cuda.synchronize(self.device)
+            backward_time = time.perf_counter() - backward_start_time
+
+        total_grad_norm_sq = 0.0
+        for param in model.parameters():
+            if param.grad is None:
+                continue
+            grad_norm = param.grad.detach().norm(2)
+            total_grad_norm_sq += grad_norm.item() ** 2
+        # This value is only for the params the current rank is holding.
+
+        self._clip_grad_norm(model, total_grad_norm_sq)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+
+        optimizer.step()
+
+        metrics = {
+            "train/loss": ScalarMetric(
+                loss.item() if self.is_last_rank else 0.0,
+                reduce="sum",
+            ),
+            "train/stage_grad_norm": ScalarMetric(total_grad_norm_sq, reduce="sum"),
+        }
+
+        if self.cfg.track_backward_time:
+            metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
+
+        return metrics
+
+    def _clip_grad_norm(self, model, grad_norm_sq: float):
+        grad_norm_sq = torch.tensor([grad_norm_sq], device=self.device, dtype=torch.float32)
+        dist.all_reduce(grad_norm_sq, op=dist.ReduceOp.SUM)
+        # TODO: max norm is harddcoded
+        # TODO: .item() is blocking here. is this the right implementation?
+        scale = min(2.0 / (math.sqrt(grad_norm_sq.item()) + 1e-8), 1.0)
+        for param in model.parameters():
+            if param.grad is not None:
+                param.grad.mul_(scale)
 
     # TODO: Blind copying the dataset fn from ddp. Will have to fix later
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
@@ -123,7 +176,6 @@ class NaivePipelineParallel(Runtime):
         )
         return val_loader
 
-    # TODO: Blind copying log fns too.
     def log(self, step: int, values_to_log: dict[str, float]) -> None:
         reduced = {}
         for k, metric in values_to_log.items():
@@ -133,6 +185,9 @@ class NaivePipelineParallel(Runtime):
             reduced["stats/tokens_per_sec"] = (
                 self.tokens_per_step / reduced["stats/train_step_time"]
             )
+        grad_norm_sq = reduced.pop("train/stage_grad_norm", None)
+        if grad_norm_sq is not None:
+            reduced["train/grad_norm"] = math.sqrt(grad_norm_sq)
         if is_main_process():
             self.metrics_logger.log(step, reduced)
 
@@ -144,6 +199,8 @@ class NaivePipelineParallel(Runtime):
             value /= self.world_size
         elif reduce == "max":
             dist.all_reduce(value, op=dist.ReduceOp.MAX)
+        elif reduce == "sum":
+            dist.all_reduce(value, op=dist.ReduceOp.SUM)
         elif reduce == "none":
             pass
         else:
@@ -168,8 +225,14 @@ class NaivePipelineParallel(Runtime):
             out_acts.backward(out_acts_grad)
 
         # incoming.backward()
-        if not self.is_main_process():
+        if not self.is_main_rank():
             dist.send(model.get_incoming_acts_grad(), self.prev_rank)
+
+        if self.is_main_rank() or self.is_last_rank:
+            grad = model.token_embed.token_embed.weight.grad
+            dist.all_reduce(grad, op=dist.ReduceOp.SUM, group=self.tie_embed_group)
+            grad.div_(dist.get_world_size(self.tie_embed_group))
+
 
     def finalize_backward(self):
         pass
@@ -179,9 +242,14 @@ class NaivePipelineParallel(Runtime):
             self.metrics_logger.close()
         cleanup()
 
-    def is_main_process(self):
+
+    def is_main_rank(self):
         return is_main_process()
 
     @property
     def is_last_rank(self):
         return self.rank == self.world_size - 1
+
+    @property
+    def tokens_per_step(self):
+        return self.cfg.trainer.per_device_batch_size * self.cfg.model.max_seq_len

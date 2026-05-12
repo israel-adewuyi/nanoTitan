@@ -48,7 +48,7 @@ class PipelineStageModel(nn.Module):
             self.token_embed = model.token_embed.to(self.device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # forward pass on the specific stage each device is holding
+        """Forward pass on the specific stage each device is holding"""
         if not self.is_first_stage:
             self.stage_input = x
             self.stage_input.requires_grad_()
