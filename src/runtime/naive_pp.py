@@ -47,6 +47,9 @@ class NaivePipelineParallel(Runtime):
         self.prev_rank = self.rank - 1
         self.next_rank = self.rank + 1
 
+        # For tied embeddings
+        self.tie_embed_group = dist.new_group(ranks=[0, self.world_size - 1])
+
     def get_rank_bounds(self):
         # return the layers that the current rank should process
         per_rank_layers = self.cfg.model.n_layers // self.world_size
@@ -222,6 +225,11 @@ class NaivePipelineParallel(Runtime):
         # incoming.backward()
         if not self.is_main_rank():
             dist.send(model.get_incoming_acts_grad(), self.prev_rank)
+
+        if self.is_main_rank() or self.is_last_rank:
+            grad = model.token_embed.token_embed.weight.grad
+            dist.all_reduce(grad, op=dist.ReduceOp.SUM, group=self.tie_embed_group)
+            grad.div_(dist.get_world_size(self.tie_embed_group))
 
     def finalize_backward(self):
         pass
