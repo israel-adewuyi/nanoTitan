@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-ReduceOp = Literal["mean", "max", "none"]
+
+ReduceOp = Literal["mean", "max", "sum", "none"]
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,10 @@ class Runtime(ABC):
         pass
 
     @abstractmethod
+    def train_step(self, model, batch, optimizer):
+        pass
+
+    @abstractmethod
     def backward(self, loss):
         pass
 
@@ -46,7 +51,7 @@ class Runtime(ABC):
         pass
 
     @abstractmethod
-    def is_main_process(self):
+    def is_main_rank(self):
         pass
 
     @abstractmethod
