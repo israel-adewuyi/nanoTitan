@@ -50,7 +50,7 @@ class Runtime(ABC):
         pass
 
     @abstractmethod
-    def is_main_process(self):
+    def is_main_rank(self):
         pass
 
     @abstractmethod

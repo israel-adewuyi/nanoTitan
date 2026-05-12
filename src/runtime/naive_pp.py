@@ -1,4 +1,5 @@
 import logging
+import math
 import time
 
 import torch
@@ -17,8 +18,6 @@ from src.dist_env import (
 )
 from src.model import NanoTitanModel
 from src.pipeline_model import PipelineStageModel
-
-# TODO: two is_main_process is bad code broo.
 from src.runtime.base import Runtime, ScalarMetric
 from src.utils import setup_tensorboard
 
@@ -39,7 +38,7 @@ class NaivePipelineParallel(Runtime):
         self.local_rank = get_local_rank()
         self.device = torch.device(f"cuda:{self.local_rank}")
 
-        if self.is_main_process():
+        if self.is_main_rank():
             self.metrics_logger = setup_tensorboard(self.cfg.run_name)
             self.log_dir = self.metrics_logger.log_dir
             self.metrics_logger.log_config(self.cfg.model_dump())
@@ -78,7 +77,7 @@ class NaivePipelineParallel(Runtime):
         x, y = batch
         optimizer.zero_grad()
 
-        if self.is_main_process():
+        if self.is_main_rank():
             x = x.to(self.device)
         else:
             x = torch.empty(
@@ -120,7 +119,6 @@ class NaivePipelineParallel(Runtime):
                 continue
             grad_norm = param.grad.detach().norm(2)
             total_grad_norm_sq += grad_norm.item() ** 2
-        total_grad_norm = total_grad_norm_sq**0.5
         # This value is only for the params the current rank is holding.
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
@@ -132,7 +130,7 @@ class NaivePipelineParallel(Runtime):
                 loss.item() if self.is_last_rank else 0.0,
                 reduce="sum",
             ),
-            "train/stage_grad_norm": ScalarMetric(total_grad_norm, reduce="max"),
+            "train/stage_grad_norm": ScalarMetric(total_grad_norm_sq, reduce="sum"),
         }
 
         if self.cfg.track_backward_time:
@@ -162,7 +160,6 @@ class NaivePipelineParallel(Runtime):
         )
         return val_loader
 
-    # TODO: Blind copying log fns too.
     def log(self, step: int, values_to_log: dict[str, float]) -> None:
         reduced = {}
         for k, metric in values_to_log.items():
@@ -172,6 +169,9 @@ class NaivePipelineParallel(Runtime):
             reduced["stats/tokens_per_sec"] = (
                 self.tokens_per_step / reduced["stats/train_step_time"]
             )
+        grad_norm_sq = reduced.pop("train/stage_grad_norm", None)
+        if grad_norm_sq is not None:
+            reduced["train/grad_norm"] = math.sqrt(grad_norm_sq)
         if is_main_process():
             self.metrics_logger.log(step, reduced)
 
@@ -209,7 +209,7 @@ class NaivePipelineParallel(Runtime):
             out_acts.backward(out_acts_grad)
 
         # incoming.backward()
-        if not self.is_main_process():
+        if not self.is_main_rank():
             dist.send(model.get_incoming_acts_grad(), self.prev_rank)
 
     def finalize_backward(self):
@@ -220,7 +220,7 @@ class NaivePipelineParallel(Runtime):
             self.metrics_logger.close()
         cleanup()
 
-    def is_main_process(self):
+    def is_main_rank(self):
         return is_main_process()
 
     @property

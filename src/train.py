@@ -74,7 +74,7 @@ def main() -> None:
     # Setup the model
     model = runtime.prepare_model(NanoTitanModel(cfg.model))
 
-    if runtime.is_main_process():
+    if runtime.is_main_rank():
         # Some detail logs about model and args
         logger.info("Loaded model config from %s", normalize_config_arg(args.config))
         logger.info("Model config: %s", cfg.model.model_dump())
@@ -140,7 +140,7 @@ def main() -> None:
 
                     val_time = time.perf_counter() - val_start_time
                     val_loss = total_loss / num_val_batches
-                    if runtime.is_main_process():
+                    if runtime.is_main_rank():
                         logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
                     runtime.log(
                         step,

@@ -94,12 +94,12 @@ class SingleDeviceRuntime(Runtime):
         optimizer.step()
 
         metrics = {
-            "train/loss": ScalarMetric(loss.item(), reduce="mean"),
-            "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
+            "train/loss": ScalarMetric(loss.item(), reduce="none"),
+            "train/grad_norm": ScalarMetric(total_grad_norm, reduce="none"),
         }
 
         if self.cfg.track_backward_time:
-            metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
+            metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="none")
 
         return metrics
 
