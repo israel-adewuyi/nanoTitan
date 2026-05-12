@@ -233,7 +233,6 @@ class NaivePipelineParallel(Runtime):
             dist.all_reduce(grad, op=dist.ReduceOp.SUM, group=self.tie_embed_group)
             grad.div_(dist.get_world_size(self.tie_embed_group))
 
-
     def finalize_backward(self):
         pass
 
@@ -241,7 +240,6 @@ class NaivePipelineParallel(Runtime):
         if is_main_process():
             self.metrics_logger.close()
         cleanup()
-
 
     def is_main_rank(self):
         return is_main_process()
