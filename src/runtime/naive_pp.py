@@ -121,7 +121,8 @@ class NaivePipelineParallel(Runtime):
             total_grad_norm_sq += grad_norm.item() ** 2
         # This value is only for the params the current rank is holding.
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+        self._clip_grad_norm(model, total_grad_norm_sq)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
 
         optimizer.step()
 
@@ -137,6 +138,16 @@ class NaivePipelineParallel(Runtime):
             metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
 
         return metrics
+
+    def _clip_grad_norm(self, model, grad_norm_sq: float):
+        grad_norm_sq = torch.tensor([grad_norm_sq], device=self.device, dtype=torch.float32)
+        dist.all_reduce(grad_norm_sq, op=dist.ReduceOp.SUM)
+        # TODO: max norm is harddcoded
+        # TODO: .item() is blocking here. is this the right implementation?
+        scale = min(2.0 / (math.sqrt(grad_norm_sq.item()) + 1e-8), 1.0)
+        for param in model.parameters():
+            if param.grad is not None:
+                param.grad.mul_(scale)
 
     # TODO: Blind copying the dataset fn from ddp. Will have to fix later
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
