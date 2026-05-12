@@ -30,6 +30,8 @@ class SingleDeviceRuntime(Runtime):
             payload["stats/tokens_per_sec"] = (
                 self.tokens_per_step / payload["stats/train_step_time"]
             )
+        if "train/loss" in payload:
+            logger.info("[Step %s] Loss: %.6f", step, payload["train/loss"])
         self.metrics_logger.log(step, payload)
 
     def prepare_model(self, model: NanoTitanModel):
