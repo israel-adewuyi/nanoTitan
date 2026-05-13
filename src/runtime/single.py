@@ -1,3 +1,4 @@
+import logging
 import time
 
 import torch
@@ -8,6 +9,8 @@ from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.runtime.base import Runtime, ScalarMetric
 from src.utils import resolve_device, setup_tensorboard
+
+logger = logging.getLogger(__name__)
 
 
 class SingleDeviceRuntime(Runtime):
@@ -62,6 +65,7 @@ class SingleDeviceRuntime(Runtime):
     def train_step(self, model, batch, optimizer):
         x, y = batch
         optimizer.zero_grad()
+        self._reset_peak_memory_stats()
         # move data to device
         x = x.to(self.device)
         y = y.to(self.device)
@@ -98,12 +102,22 @@ class SingleDeviceRuntime(Runtime):
         metrics = {
             "train/loss": ScalarMetric(loss.item(), reduce="none"),
             "train/grad_norm": ScalarMetric(total_grad_norm, reduce="none"),
+            "stats/peak_memory_mb": ScalarMetric(self._peak_memory_mb(), reduce="none"),
         }
 
         if self.cfg.track_backward_time:
             metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="none")
 
         return metrics
+
+    def _reset_peak_memory_stats(self):
+        if self.device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(self.device)
+
+    def _peak_memory_mb(self) -> float:
+        if self.device.type != "cuda":
+            return 0.0
+        return torch.cuda.max_memory_allocated(self.device) / (1024**2)
 
     def backward(self, loss, model):
         loss.backward()
