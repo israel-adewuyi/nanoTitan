@@ -81,6 +81,7 @@ class NaivePipelineParallel(Runtime):
     def train_step(self, model, batch, optimizer):
         x, y = batch
         optimizer.zero_grad()
+        self._reset_peak_memory_stats()
 
         if self.is_main_rank():
             x = x.to(self.device)
@@ -138,6 +139,7 @@ class NaivePipelineParallel(Runtime):
             ),
             "train/stage_grad_norm": ScalarMetric(total_grad_norm_sq, reduce="sum"),
         }
+        metrics.update(self._peak_memory_metrics())
 
         if self.cfg.track_backward_time:
             metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
@@ -153,6 +155,25 @@ class NaivePipelineParallel(Runtime):
         for param in model.parameters():
             if param.grad is not None:
                 param.grad.mul_(scale)
+
+    def _reset_peak_memory_stats(self):
+        if self.device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(self.device)
+
+    def _peak_memory_mb(self) -> float:
+        if self.device.type != "cuda":
+            return 0.0
+        return torch.cuda.max_memory_allocated(self.device) / (1024**2)
+
+    def _peak_memory_metrics(self) -> dict[str, ScalarMetric]:
+        peak_memory_mb = self._peak_memory_mb()
+        return {
+            f"stats/peak_memory_rank_{rank}_mb": ScalarMetric(
+                peak_memory_mb if rank == self.rank else 0.0,
+                reduce="sum",
+            )
+            for rank in range(self.world_size)
+        }
 
     # TODO: Blind copying the dataset fn from ddp. Will have to fix later
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
