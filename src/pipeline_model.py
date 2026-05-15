@@ -31,6 +31,9 @@ class PipelineStageModel(nn.Module):
 
         self.partition_params(model)
 
+        self.stage_inputs, self.stage_outputs = [], []
+        self.microbatch_idx = 0
+
     def partition_params(self, model):
         self.stage = nn.ModuleList()
 
@@ -52,6 +55,7 @@ class PipelineStageModel(nn.Module):
         if not self.is_first_stage:
             self.stage_input = x
             self.stage_input.requires_grad_()
+            self.stage_inputs.append(self.stage_input)
 
         if self.is_first_stage:
             token_embed = self.token_embed(x)
@@ -63,12 +67,16 @@ class PipelineStageModel(nn.Module):
         if self.is_last_stage:
             x = self.token_embed.project(x)
 
-        self.stage_out = x
+        self.stage_outputs.append(x)
 
         return x
 
-    def get_incoming_acts_grad(self):
-        return self.stage_input.grad
+    def get_incoming_acts_grad(self, microbatch_idx: int = 0):
+        return self.stage_inputs[microbatch_idx].grad
 
-    def get_outgoing_acts(self):
-        return self.stage_out
+    def get_outgoing_acts(self, microbatch_idx: int = 0):
+        return self.stage_outputs[microbatch_idx]
+
+    def clear_cache_acts(self) -> None:
+        self.stage_inputs = []
+        self.stage_outputs = []
