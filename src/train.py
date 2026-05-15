@@ -12,7 +12,13 @@ from src.data.dataset import PackedTokenDataset
 from src.model import NanoTitanModel
 from src.optim import setup_optimizer
 from src.profiler import build_profiler
-from src.runtime import DDPRuntime, DDPRuntimeRef, NaivePipelineParallel, SingleDeviceRuntime
+from src.runtime import (
+    DDPRuntime,
+    DDPRuntimeRef,
+    GPipePipelineParallel,
+    NaivePipelineParallel,
+    SingleDeviceRuntime,
+)
 from src.runtime.base import ScalarMetric
 from src.utils import load_run_config, normalize_config_arg, seed_everything, setup_logging
 
@@ -50,6 +56,8 @@ def build_runtime(cfg: AppConfig):
         return DDPRuntime(cfg)
     elif cfg.runtime.name == "naive_pp":
         return NaivePipelineParallel(cfg)
+    elif cfg.runtime.name == "pp_gpipe":
+        return GPipePipelineParallel(cfg)
     else:
         raise ValueError(f"Runtime of name {cfg.runtime.name} hasn't been implemented yet.")
 

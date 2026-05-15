@@ -40,10 +40,13 @@ class RuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    # Literal[single, ddp_reference, ddp]
+    # Literal[single, ddp_reference, ddp, pp_naive, pp_gpipe]
     reducer: str = "v0"
     # if ddp, options are v0 or v1
     bucket_size: int = 25
+
+    # PP specific args
+    num_microbatches: int = 1
 
 
 class ProfilerConfig(BaseModel):
