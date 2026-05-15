@@ -77,6 +77,6 @@ class PipelineStageModel(nn.Module):
     def get_outgoing_acts(self, microbatch_idx: int = 0):
         return self.stage_outputs[microbatch_idx]
 
-    def clear_cache_acts(self) -> None:
+    def clear_cached_acts(self) -> None:
         self.stage_inputs = []
         self.stage_outputs = []
