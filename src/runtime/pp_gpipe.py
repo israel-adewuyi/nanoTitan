@@ -81,7 +81,7 @@ class GPipePipelineParallel(Runtime):
     def train_step(self, model, batch, optimizer):
         x, y = batch
         microbatch_x, microbatch_y = self.prepare_microbatch(x, y)
-        microbatch_size = x.shape[0] // self.cfg.runtime.num_microbatches
+        self.microbatch_size = x.shape[0] // self.cfg.runtime.num_microbatches
         optimizer.zero_grad()
         self._reset_peak_memory_stats()
         losses, backward_time = [], None
@@ -92,7 +92,7 @@ class GPipePipelineParallel(Runtime):
             else:
                 mb_x = torch.empty(
                     (
-                        microbatch_size,
+                        self.microbatch_size,
                         self.cfg.model.max_seq_len,
                         self.cfg.model.d_model,
                     ),
@@ -113,6 +113,7 @@ class GPipePipelineParallel(Runtime):
             else:
                 logger.debug(f"Sending activations from rank {self.rank} to rank {self.next_rank}")
                 dist.send(mb_x, self.next_rank)
+                losses.append(None)
 
         if self.cfg.track_backward_time:
             torch.cuda.synchronize(self.device)
@@ -120,8 +121,8 @@ class GPipePipelineParallel(Runtime):
 
         # Backward pass
         for microbatch_idx in reversed(range(self.cfg.runtime.num_microbatches)):
-            loss = losses[microbatch_idx] / self.cfg.runtime.num_microbatches
-            self.backward(loss, model, microbatch_idx)
+            loss = losses[microbatch_idx - 1] / self.cfg.runtime.num_microbatches if self.is_last_rank else None
+            self.backward(loss, model, microbatch_idx - 1)
             self.finalize_backward()
 
         if self.cfg.track_backward_time:
@@ -256,7 +257,7 @@ class GPipePipelineParallel(Runtime):
             out_acts = model.get_outgoing_acts(microbatch_idx)
             out_acts_grad = torch.empty(
                 (
-                    microbatch_size,
+                    self.microbatch_size,
                     self.cfg.model.max_seq_len,
                     self.cfg.model.d_model,
                 ),
