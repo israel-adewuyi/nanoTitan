@@ -68,6 +68,12 @@ class ProfilerConfig(BaseModel):
         return self
 
 
+class HardwareConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    peak_flops_tflops_per_gpu: float = 0.0
+
+
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -110,6 +116,7 @@ class AppConfig(BaseModel):
     optim: OptimizerConfig
     runtime: RuntimeConfig
     profiler: ProfilerConfig = Field(default_factory=ProfilerConfig)
+    hardware: HardwareConfig = Field(default_factory=HardwareConfig)
 
     track_backward_time: bool = False
 

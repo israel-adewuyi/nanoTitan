@@ -29,10 +29,7 @@ class SingleDeviceRuntime(Runtime):
     def log(self, step: int, values_to_log: dict[str, ScalarMetric]) -> None:
         payload = {k: v.value for k, v in values_to_log.items()}
 
-        if "stats/train_step_time" in payload:
-            payload["stats/tokens_per_sec"] = (
-                self.tokens_per_step / payload["stats/train_step_time"]
-            )
+        self.add_throughput_metrics(payload)
         if "train/loss" in payload:
             logger.info("[Step %s] Loss: %.6f", step, payload["train/loss"])
         self.metrics_logger.log(step, payload)

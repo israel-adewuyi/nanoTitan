@@ -50,10 +50,7 @@ class DDPRuntime(Runtime):
         for k, metric in values_to_log.items():
             reduced[k] = self.reduce_scalar(metric.value, metric.reduce)
 
-        if "stats/train_step_time" in reduced:
-            reduced["stats/tokens_per_sec"] = (
-                self.tokens_per_step / reduced["stats/train_step_time"]
-            )
+        self.add_throughput_metrics(reduced)
         if is_main_process():
             self.metrics_logger.log(step, reduced)
 
@@ -110,6 +107,10 @@ class DDPRuntime(Runtime):
     @property
     def tokens_per_step(self):
         return self.cfg.trainer.per_device_batch_size * self.cfg.model.max_seq_len * self.world_size
+
+    @property
+    def num_mfu_devices(self):
+        return self.world_size
 
     def cleanup(self):
         if is_main_process():

@@ -80,7 +80,9 @@ def main() -> None:
     val_loader = runtime.prepare_valloader(val_dataset)
 
     # Setup the model
-    model = runtime.prepare_model(NanoTitanModel(cfg.model))
+    raw_model = NanoTitanModel(cfg.model)
+    runtime.register_model_stats(raw_model)
+    model = runtime.prepare_model(raw_model)
 
     if runtime.is_main_rank():
         # Some detail logs about model and args
