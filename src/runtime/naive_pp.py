@@ -202,10 +202,7 @@ class NaivePipelineParallel(Runtime):
         for k, metric in values_to_log.items():
             reduced[k] = self.reduce_scalar(metric.value, metric.reduce)
 
-        if "stats/train_step_time" in reduced:
-            reduced["stats/tokens_per_sec"] = (
-                self.tokens_per_step / reduced["stats/train_step_time"]
-            )
+        self.add_throughput_metrics(reduced)
         grad_norm_sq = reduced.pop("train/stage_grad_norm", None)
         if grad_norm_sq is not None:
             reduced["train/grad_norm"] = math.sqrt(grad_norm_sq)
@@ -275,3 +272,7 @@ class NaivePipelineParallel(Runtime):
     @property
     def tokens_per_step(self):
         return self.cfg.trainer.per_device_batch_size * self.cfg.model.max_seq_len
+
+    @property
+    def num_mfu_devices(self):
+        return self.world_size
