@@ -1,21 +1,34 @@
+# ToDO
+
+- [x] DDP
+- [x] Benchmark DDP
+- [x] Pipeline Parallelism (PP)
+- [ ] Benchmark PP
+- [ ] Tensor Parallelism (TP)
+- [ ] Benchmark TP
+- [ ] FSDP
+- [ ] Bechmark FSDP
+
 # Benchmark Results
 
 ## Model Specs
 
-| Spec             |       Value |
-| ---------------- | ----------: |
-| Total parameters |         92M |
-| Layers           |          16 |
-| Hidden size      |         512 |
-| Attention heads  |          16 |
-| Head dimension   |          32 |
-| FFN hidden size  |       2,048 |
-| Vocabulary size  |      50,257 |
-| Sequence length  |         768 |
-| Optimizer        |        Adam |
-| Dataset          | TinyStories |
-| Seed             |          42 |
-| Learning rate    |        5e-4 |
+| Spec                    |       Value |
+| ----------------------- | ----------: |
+| Total parameters        |         92M |
+| Layers                  |          16 |
+| Hidden size             |         512 |
+| Attention heads         |          16 |
+| Head dimension          |          32 |
+| FFN hidden size         |       2,048 |
+| Vocabulary size         |      50,257 |
+| Sequence length         |         768 |
+| Optimizer               |        Adam |
+| Dataset                 | TinyStories |
+| Seed                    |          42 |
+| Learning rate           |        5e-4 |
+| #training steps (1 GPU) |  6000 steps |
+| #training steps (2 GPU) |  3500 steps |
 
 ## Benchmark Table
 
@@ -34,14 +47,3 @@ Loss plot
 ![Loss plot](assets/ddp/loss.png)
 Grad Norm plot
 ![!Grad Norm plot](assets/ddp/grad_norm.png)
-
-# ToDO
-
-- [x] DDP
-- [x] Benchmark DDP
-- [x] Pipeline Parallelism (PP)
-- [ ] Benchmark PP
-- [ ] Tensor Parallelism (TP)
-- [ ] Benchmark TP
-- [ ] FSDP
-- [ ] Bechmark FSDP
