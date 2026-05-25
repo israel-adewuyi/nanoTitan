@@ -100,7 +100,7 @@ class DDPRuntimeRef(Runtime):
     def backward(self, loss):
         loss.backward()
 
-    def is_main_process(self):
+    def is_main_rank(self):
         return is_main_process()
 
     def finalize_backward(self):

@@ -103,7 +103,7 @@ class GPipePipelineParallel(Runtime):
                 )
                 dist.recv(mb_x, self.prev_rank)
 
-            mb_x = model(mb_x)
+            mb_x = model(mb_x) #TODO: Wrong word here. A more intuitive name should be something like mb_out
 
             if self.is_last_rank:
                 # compute loss here
