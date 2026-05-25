@@ -18,7 +18,7 @@ from src.dist_env import (
     is_main_process,
 )
 from src.model import NanoTitanModel
-from src.runtime.base import Runtime
+from src.runtime.base import Runtime, ScalarMetric
 from src.utils import setup_tensorboard
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,8 @@ class DDPRuntimeRef(Runtime):
 
         self.add_throughput_metrics(reduced)
         if is_main_process():
+            if "train/loss" in reduced:
+                logger.info("[Step %s] Loss: %.6f", step, reduced["train/loss"])
             self.metrics_logger.log(step, reduced)
 
     def reduce_scalar(self, value: float | int, reduce: str) -> float:
@@ -61,6 +63,8 @@ class DDPRuntimeRef(Runtime):
             value /= self.world_size
         elif reduce == "max":
             dist.all_reduce(value, op=dist.ReduceOp.MAX)
+        elif reduce == "sum":
+            dist.all_reduce(value, op=dist.ReduceOp.SUM)
         elif reduce == "none":
             # all ranks have the same val e.g tokens
             pass
@@ -160,6 +164,27 @@ class DDPRuntimeRef(Runtime):
 
     def finalize_backward(self):
         pass
+
+    # TODO: maybe move these to base? If a couple of runtimes need these
+    def _reset_peak_memory_stats(self):
+        if self.device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(self.device)
+
+    def _peak_memory_mb(self) -> float:
+        if self.device.type != "cuda":
+            return 0.0
+        return torch.cuda.max_memory_allocated(self.device) / (1024**2)
+
+    # TODO: Reason about this metric... might be the wrong formulation to use
+    def _peak_memory_metrics(self) -> dict[str, ScalarMetric]:
+        peak_memory_mb = self._peak_memory_mb()
+        return {
+            f"stats/peak_memory_rank_{rank}_mb": ScalarMetric(
+                peak_memory_mb if rank == self.rank else 0.0,
+                reduce="sum",
+            )
+            for rank in range(self.world_size)
+        }
 
     @property
     def tokens_per_step(self):

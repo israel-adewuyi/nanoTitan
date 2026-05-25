@@ -1,3 +1,4 @@
+import logging
 import time
 
 import torch
@@ -19,6 +20,8 @@ from src.model import NanoTitanModel
 from src.runtime.base import Runtime, ScalarMetric
 from src.runtime.reducer import ReducerV0, ReducerV1
 from src.utils import setup_tensorboard
+
+logger = logging.getLogger(__name__)
 
 
 class DDPRuntime(Runtime):
@@ -55,6 +58,8 @@ class DDPRuntime(Runtime):
 
         self.add_throughput_metrics(reduced)
         if is_main_process():
+            if "train/loss" in reduced:
+                logger.info("[Step %s] Loss: %.6f", step, reduced["train/loss"])
             self.metrics_logger.log(step, reduced)
 
     def reduce_scalar(self, value: float | int, reduce: str) -> float:
