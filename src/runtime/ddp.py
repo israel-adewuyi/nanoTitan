@@ -1,6 +1,8 @@
+import time
+
 import torch
-import torch.nn.functional as F
 import torch.distributed as dist
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -63,6 +65,8 @@ class DDPRuntime(Runtime):
             value /= self.world_size
         elif reduce == "max":
             dist.all_reduce(value, op=dist.ReduceOp.MAX)
+        elif reduce == "sum":
+            dist.all_reduce(value, op=dist.ReduceOp.SUM)
         elif reduce == "none":
             pass
         else:
@@ -101,30 +105,31 @@ class DDPRuntime(Runtime):
         # move data to device
         x = x.to(self.device)
         y = y.to(self.device)
-        
-        # zero the grad tensor for all trainable params
+
+        # zero the grad tensor for all trainable params and reset the mem stats
         optimizer.zero_grad()
-        
+        self._reset_peak_memory_stats()
+
         # forward pass
         logits = model(x)
-        
+
         # compute loss
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
-        
+
         # log loss here
-        
+
         # backward pass
         if self.cfg.track_backward_time:
             torch.cuda.synchronize(self.device)
             backward_start_time = time.perf_counter()
-            
+
         self.backward(loss)
         self.finalize_backward()
-        
+
         if self.cfg.track_backward_time:
-            torch.cuda.synchronize(runtime.device)
+            torch.cuda.synchronize(self.device)
             backward_time = time.perf_counter() - backward_start_time
-        
+
         total_grad_norm_sq = 0.0
         for param in model.parameters():
             if param.grad is None:
@@ -136,10 +141,10 @@ class DDPRuntime(Runtime):
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
 
         optimizer.step()
-        
+
         metrics = {
-            "train/loss": ScalarMetric(loss.item() ,reduce="mean"),
-            "train/grad_norm": ScalarMetric(total_grad_norm_sq, reduce="mean"),
+            "train/loss": ScalarMetric(loss.item(), reduce="mean"),
+            "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
         }
         metrics.update(self._peak_memory_metrics())
 
@@ -147,7 +152,7 @@ class DDPRuntime(Runtime):
             metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
 
         return metrics
-    
+
     def backward(self, loss):
         loss.backward()
 
@@ -164,8 +169,8 @@ class DDPRuntime(Runtime):
     @property
     def num_mfu_devices(self):
         return self.world_size
-    
-    #TODO: maybe move these to base? If a couple of runtimes need these
+
+    # TODO: maybe move these to base? If a couple of runtimes need these
     def _reset_peak_memory_stats(self):
         if self.device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(self.device)
@@ -175,13 +180,13 @@ class DDPRuntime(Runtime):
             return 0.0
         return torch.cuda.max_memory_allocated(self.device) / (1024**2)
 
-    #TODO: Reason about this metric... might be the wrong formulation to use
+    # TODO: Reason about this metric... might be the wrong formulation to use
     def _peak_memory_metrics(self) -> dict[str, ScalarMetric]:
         peak_memory_mb = self._peak_memory_mb()
         return {
             f"stats/peak_memory_rank_{rank}_mb": ScalarMetric(
                 peak_memory_mb if rank == self.rank else 0.0,
-                reduce="mean",
+                reduce="sum",
             )
             for rank in range(self.world_size)
         }

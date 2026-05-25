@@ -1,7 +1,9 @@
 import logging
+import time
 
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -96,6 +98,59 @@ class DDPRuntimeRef(Runtime):
             drop_last=False,
         )
         return val_loader
+
+    def train_step(self, model, batch, optimizer):
+        x, y = batch
+        # move data to device
+        x = x.to(self.device)
+        y = y.to(self.device)
+
+        # zero the grad tensor for all trainable params and reset the mem stats
+        optimizer.zero_grad()
+        self._reset_peak_memory_stats()
+
+        # forward pass
+        logits = model(x)
+
+        # compute loss
+        loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
+
+        # log loss here
+
+        # backward pass
+        if self.cfg.track_backward_time:
+            torch.cuda.synchronize(self.device)
+            backward_start_time = time.perf_counter()
+
+        self.backward(loss)
+        self.finalize_backward()
+
+        if self.cfg.track_backward_time:
+            torch.cuda.synchronize(self.device)
+            backward_time = time.perf_counter() - backward_start_time
+
+        total_grad_norm_sq = 0.0
+        for param in model.parameters():
+            if param.grad is None:
+                continue
+            grad_norm = param.grad.detach().norm(2)
+            total_grad_norm_sq += grad_norm.item() ** 2
+        total_grad_norm = total_grad_norm_sq**0.5
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
+
+        optimizer.step()
+
+        metrics = {
+            "train/loss": ScalarMetric(loss.item(), reduce="mean"),
+            "train/grad_norm": ScalarMetric(total_grad_norm, reduce="mean"),
+        }
+        metrics.update(self._peak_memory_metrics())
+
+        if self.cfg.track_backward_time:
+            metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="max")
+
+        return metrics
 
     def backward(self, loss):
         loss.backward()
