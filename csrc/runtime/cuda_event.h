@@ -12,6 +12,12 @@ class CudaEvent{
             cudaEventDestroy(event_);
         }
 
+        // Move constructor
+        CudaEvent(const CudaEvent&other) noexcept : event_(other.event_){
+            other.event_ = nullptr;
+        }
+
+        // Disable copy constructor and copy assignment operator
         CudaEvent(const CudaEvent&) = delete;
         CudaEvent& operator=(const CudaEvent&) = delete;
 
