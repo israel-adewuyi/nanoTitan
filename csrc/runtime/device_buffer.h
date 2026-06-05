@@ -13,6 +13,13 @@ class DeviceBuffer{
             cudaFree(ptr_);
         }
 
+        // Move constructor
+        DeviceBuffer(const DeviceBuffer&other) noexcept: ptr_(other.ptr_), count_(other.count_){
+            other.ptr_ = nullptr;
+            other.count_ = 0;
+        }
+
+        // Disable copy constructor and copy assignment operator
         DeviceBuffer(const DeviceBuffer&) = delete;
         DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
@@ -20,6 +27,13 @@ class DeviceBuffer{
             return ptr_;
         }
 
+        int64_t size() const {
+            return count_;
+        }
+
+        int64_t bytes() const {
+            return count_ * sizeof(T);
+        }
 
     private:
         T* ptr_{nullptr};
