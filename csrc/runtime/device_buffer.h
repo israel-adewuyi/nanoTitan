@@ -14,7 +14,7 @@ class DeviceBuffer{
         }
 
         // Move constructor
-        DeviceBuffer(const DeviceBuffer&other) noexcept: ptr_(other.ptr_), count_(other.count_){
+        DeviceBuffer(DeviceBuffer&& other) noexcept: ptr_(other.ptr_), count_(other.count_){
             other.ptr_ = nullptr;
             other.count_ = 0;
         }
@@ -38,4 +38,4 @@ class DeviceBuffer{
     private:
         T* ptr_{nullptr};
         size_t count_{0};
-}
+};
