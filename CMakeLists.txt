@@ -13,6 +13,35 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# -----------------------------
+# PyTorch / CUDA / NCCL
+# -----------------------------
+
+# Prefer passing CMAKE_PREFIX_PATH from the command line, but keep this fallback.
+list(APPEND CMAKE_PREFIX_PATH
+    "/home/israel/nanoTitan/.venv/lib/python3.13/site-packages/torch"
+)
+
+find_package(Torch REQUIRED)
+find_package(CUDAToolkit REQUIRED)
+
+# Find NCCL from the PyTorch wheel first, then system locations.
+find_library(NCCL_LIBRARY
+    NAMES nccl
+    PATHS
+        "/home/israel/nanoTitan/.venv/lib/python3.13/site-packages/nvidia/nccl/lib"
+        "/usr/local/cuda-12.2/lib64"
+        "/usr/local/cuda/lib64"
+        "/usr/lib/x86_64-linux-gnu"
+        "/usr/lib"
+)
+
+if (NOT NCCL_LIBRARY)
+    message(FATAL_ERROR "Could not find NCCL library")
+endif()
+
+message(STATUS "Found NCCL: ${NCCL_LIBRARY}")
+
 # Helpful compile warnings
 if (MSVC)
     add_compile_options(/W4)
@@ -33,10 +62,20 @@ target_include_directories(nanotitan_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/csrc
         ${CMAKE_CURRENT_SOURCE_DIR}/csrc/runtime
+        ${TORCH_INCLUDE_DIRS}
 )
 
-# If you later add CUDA .cu files, enable CUDA support separately.
-# For now, this assumes your current .cpp files compile with a normal C++ compiler.
+target_compile_options(nanotitan_core
+    PRIVATE
+        ${TORCH_CXX_FLAGS}
+)
+
+target_link_libraries(nanotitan_core
+    PUBLIC
+        ${TORCH_LIBRARIES}
+        CUDA::cudart
+        ${NCCL_LIBRARY}
+)
 
 # -----------------------------
 # Benchmark executable
@@ -74,7 +113,6 @@ if (NANOTITAN_BUILD_TESTS)
         URL https://github.com/google/googletest/archive/refs/heads/main.zip
     )
 
-    # Useful on Windows
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
     FetchContent_MakeAvailable(googletest)
