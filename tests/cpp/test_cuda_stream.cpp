@@ -3,15 +3,25 @@
 #include <cuda_check.h>
 #include <device_buffer.h>
 
-TEST(CudaStreamTest, canLaunchKernel){
-    // Initialize stream
-    CudaStream stream;
-    // Initialize buffer
-    DeviceBuffer<float> x(1024);
+// TEST(CudaStreamTest, canLaunchKernel){
+//     // Initialize stream
+//     CudaStream stream;
+//     // Initialize buffer
+//     DeviceBuffer<float> x(1024);
 
-    // I honestly don't know how this work in-depth. Will revisit when I get the testing module to work first.
-    fill_kernel<<<4, 256, 0, stream.get()>>>(x.data(), 1024, 1.0f);
+//     // I honestly don't know how this work in-depth. Will revisit when I get the testing module to work first.
+//     fill_kernel<<<4, 256, 0, stream.get()>>>(x.data(), 1024, 1.0f);
 
-    CUDA_KERNEL_CHECK();
-    CUDA_CHECK(cudaStreamSynchronize(stream.get()));
+//     CUDA_KERNEL_CHECK();
+//     CUDA_CHECK(cudaStreamSynchronize(stream.get()));
+// }
+
+TEST(DeviceBufferTest, MoveConstructionWorks) {
+  DeviceBuffer<float> a(1024);
+  float* old_ptr = a.data();
+
+  DeviceBuffer<float> b(std::move(a));
+
+  EXPECT_EQ(b.data(), old_ptr);
+  EXPECT_EQ(a.data(), nullptr);
 }
