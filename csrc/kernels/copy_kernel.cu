@@ -34,7 +34,7 @@ int main(){
 
     copy_kernel<<<blocks, threads>>>(c_src, c_dest, N);
 
-    CUDA_KERNEL_CHECK()
+    CUDA_KERNEL_CHECK();
 
     CUDA_CHECK(cudaMemcpy(dest.data(), c_dest, N * sizeof(float), cudaMemcpyDeviceToHost));
 
