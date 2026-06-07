@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
 
-from src.model import NanoTitanModel
+from src.model.model import NanoTitanModel
 
 
 class ReducerV0:

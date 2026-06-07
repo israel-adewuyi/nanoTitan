@@ -16,7 +16,7 @@ from src.dist_env import (
     init_distributed,
     is_main_process,
 )
-from src.model import NanoTitanModel
+from src.model.model import NanoTitanModel
 from src.pipeline_model import PipelineStageModel
 
 # TODO: two is_main_process is bad code broo
@@ -103,7 +103,9 @@ class GPipePipelineParallel(Runtime):
                 )
                 dist.recv(mb_x, self.prev_rank)
 
-            mb_x = model(mb_x) #TODO: Wrong word here. A more intuitive name should be something like mb_out
+            mb_x = model(
+                mb_x
+            )  # TODO: Wrong word here. A more intuitive name should be something like mb_out
 
             if self.is_last_rank:
                 # compute loss here
