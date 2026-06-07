@@ -16,7 +16,7 @@ from src.dist_env import (
     init_distributed,
     is_main_process,
 )
-from src.model import NanoTitanModel
+from src.model.model import NanoTitanModel
 from src.runtime.base import Runtime, ScalarMetric
 from src.runtime.reducer import ReducerV0, ReducerV1
 from src.utils import setup_tensorboard
