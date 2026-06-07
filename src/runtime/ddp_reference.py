@@ -75,7 +75,7 @@ class DDPRuntimeRef(Runtime):
 
     def prepare_model(self, model: NanoTitanModel):
         model = model.to(self.device)
-        return DDP(model, device_ids=[self.local_rank], output_device=self.local_rank)
+        return DDP(model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
 
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
         train_loader = DataLoader(

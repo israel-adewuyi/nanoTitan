@@ -167,7 +167,8 @@ class TransformerLayer(nn.Module):
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
     ) -> torch.Tensor[Float, "batch seq_len d_model"]:
         x = self.attn(self.attn_norm(x)) + x
-        x = self.ffn(self.ffn_norm(x)) + x
+        out, _ = self.ffn(self.ffn_norm(x))
+        x = out + x
         return x
 
 
