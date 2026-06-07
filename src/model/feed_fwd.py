@@ -19,8 +19,8 @@ class FFN(nn.Module):
         self.silu = nn.SiLU()
 
     def forward(
-        self, x: torch.Tensor[Float, "batch seq_len d_model"]
-    ) -> torch.Tensor[Float, "batch seq_len d_model"]:
+        self, x: Float[torch.Tensor, "batch seq_len d_model"]
+    ) -> Float[torch.Tensor, "batch seq_len d_model"]:
         # SwiGLU: silu(gate) * value
         gate = self.silu(self.W_gate(x))
         value = self.W_val(x)
