@@ -9,7 +9,8 @@ import torch.nn.functional as F
 
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
-from src.model import NanoTitanModel
+from src.dist_env import get_world_size
+from src.model.model import NanoTitanModel
 from src.optim import setup_optimizer
 from src.profiler import build_profiler
 from src.runtime import (
@@ -66,8 +67,14 @@ def main() -> None:
     args = parse_args()
     setup_logging(args.log_level)
 
-    # get configs, setup runtime, seed everything
+    # get configs, run sanity checks for device mesh
     cfg = load_run_config(args.config)
+    world_size = get_world_size()
+    assert world_size == cfg.runtime.dp_size * cfg.runtime.pp_size
+    assert cfg.model.n_layers % cfg.runtime.pp_size == 0
+    assert cfg.trainer.per_device_batch_size % cfg.trainer.microbatches == 0
+
+    # setup runtime, seed everything
     runtime = build_runtime(cfg)
     seed_everything(cfg.trainer.seed)
 
