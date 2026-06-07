@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from src.data.dataset import PackedTokenDataset
-from src.model import NanoTitanModel
+from src.model.model import NanoTitanModel
 from src.runtime.base import Runtime, ScalarMetric
 from src.utils import resolve_device, setup_tensorboard
 
