@@ -20,7 +20,7 @@ __global__ void copy_kernel_vector(float* src, float* dest, int N){
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(i < N){
-        reinterpret_cast<float4*>dest[i] = reinterpret_cast<float4*>src[i];
+        reinterpret_cast<float4*>(dest)[i] = reinterpret_cast<float4*>(src)[i];
     }
 }
 
@@ -52,6 +52,7 @@ int main(){
 
     for(auto &num : dest){
         assert(num == 12345);
+        cout << num << endl;
     }
 
     return 0;
