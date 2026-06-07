@@ -16,7 +16,7 @@ from src.dist_env import (
     init_distributed,
     is_main_process,
 )
-from src.model import NanoTitanModel
+from src.model.model import NanoTitanModel
 from src.pipeline_model import PipelineStageModel
 
 # TODO: two is_main_process is bad code broo
