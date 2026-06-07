@@ -6,12 +6,21 @@
 
 using namespace std;
 
-__global__ void copy_kernel(float* src, float* dest, int N){
-    // get index
+__global__ void copy_kernel_scalar(float* src, float* dest, int N){
+    // get global index
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(i < N){
         dest[i] = src[i];
+    }
+}
+
+__global__ void copy_kernel_vector(float* src, float* dest, int N){
+    // get global index
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(i < N){
+        reinterpret_cast<float4*>dest[i] = reinterpret_cast<float4*>src[i];
     }
 }
 
@@ -32,7 +41,7 @@ int main(){
     int threads = 256;
     int blocks  = (N + threads - 1) / threads;
 
-    copy_kernel<<<blocks, threads>>>(c_src, c_dest, N);
+    copy_kernel_vector<<<blocks, threads>>>(c_src, c_dest, N);
 
     CUDA_KERNEL_CHECK();
 
