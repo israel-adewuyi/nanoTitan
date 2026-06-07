@@ -48,6 +48,9 @@ class RuntimeConfig(BaseModel):
     # PP specific args
     num_microbatches: int = 1
 
+    dp_size: int = 1
+    pp_size: int = 1
+
 
 class ProfilerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -84,6 +87,8 @@ class ModelConfig(BaseModel):
     n_layers: PositiveInt
     max_seq_len: PositiveInt
     ffn_in: PositiveInt
+    num_experts: PositiveInt
+    top_k: PositiveInt
     token_embedding: TokenEmbeddingConfig = Field(default_factory=TokenEmbeddingConfig)
     positional_embedding: PositionalEmbeddingConfig = Field(
         default_factory=PositionalEmbeddingConfig
