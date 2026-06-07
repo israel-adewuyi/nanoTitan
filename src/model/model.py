@@ -8,7 +8,7 @@ import torch.nn as nn
 from jaxtyping import Float
 
 from src.config import ModelConfig
-from src.model.moe_layer import MoE
+from src.model.feed_fwd import MoE
 
 
 class TokenEmbed(nn.Module):
@@ -149,30 +149,6 @@ class MultiHeadAttention(nn.Module):
 
         out = einops.einsum(attn_out, self.W_O, "batch seq d_in, d_in d_model -> batch seq d_model")
         return out
-
-
-class FFN(nn.Module):
-    """Feedforward network implementation"""
-
-    def __init__(self, cfg: ModelConfig):
-        super().__init__()
-        self.cfg = cfg
-
-        # SwiGLU uses two parallel input projections
-        self.W_gate = nn.Linear(cfg.d_model, cfg.ffn_in)
-        self.W_val = nn.Linear(cfg.d_model, cfg.ffn_in)
-        self.W_out = nn.Linear(cfg.ffn_in, cfg.d_model)
-        self.silu = nn.SiLU()
-
-    def forward(
-        self, x: torch.Tensor[Float, "batch seq_len d_model"]
-    ) -> torch.Tensor[Float, "batch seq_len d_model"]:
-        # SwiGLU: silu(gate) * value
-        gate = self.silu(self.W_gate(x))
-        value = self.W_val(x)
-        ffn_out = gate * value  # element-wise multiplication
-
-        return self.W_out(ffn_out)
 
 
 class TransformerLayer(nn.Module):

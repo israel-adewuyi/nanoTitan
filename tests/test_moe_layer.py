@@ -1,7 +1,7 @@
 import torch
 
 from src.config import ModelConfig
-from src.model.moe_layer import MoE
+from src.model.feed_fwd import MoE
 
 
 def make_test_config(d_model=8, num_experts=4, top_k=2):
