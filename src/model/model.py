@@ -8,6 +8,7 @@ import torch.nn as nn
 from jaxtyping import Float
 
 from src.config import ModelConfig
+from src.model.moe_layer import MoE
 
 
 class TokenEmbed(nn.Module):
@@ -182,7 +183,7 @@ class TransformerLayer(nn.Module):
         self.cfg = cfg
 
         self.attn = MultiHeadAttention(cfg)
-        self.ffn = FFN(cfg)
+        self.ffn = MoE(cfg)
         self.attn_norm = LayerNorm(cfg)
         self.ffn_norm = LayerNorm(cfg)
 
