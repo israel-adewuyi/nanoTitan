@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from src.model import NanoTitanModel
+from src.model.model import NanoTitanModel
 
 
 class PipelineStageModel(nn.Module):
