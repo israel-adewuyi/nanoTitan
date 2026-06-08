@@ -1,5 +1,5 @@
-import torch
 import random_ext
+import torch
 
 
 def bench_copy(dtype, numel, iters=1000, warmup=20):
@@ -26,20 +26,21 @@ def bench_copy(dtype, numel, iters=1000, warmup=20):
     total_ms = start.elapsed_time(end)
     avg_ms = total_ms / iters
 
-    ok = torch.allclose(src, dst)
+    ok = torch.equal(src, dst)
 
-    bytes_moved = src.numel() * src.element_size()
-    gbps_one_way = bytes_moved / (avg_ms / 1000) / 1e9
-    gbps_read_write = 2 * bytes_moved / (avg_ms / 1000) / 1e9
+    bytes_moved = src.numel() * src.element_size() * 2
+    tensor_mb = src.numel() * src.element_size() / 1e6
+    bandwidth_GBs = bytes_moved / (avg_ms / 1000) / 1e9
+    traffic_gb = bytes_moved / 1e9
 
     print(
         f"dtype={dtype} "
         f"numel={numel} "
-        f"size_mb={bytes_moved / 1e6:.1f} "
+        f"tensor_MB={tensor_mb:.1f} "
+        f"traffic_GB={traffic_gb:.2f} "
         f"ok={ok} "
         f"avg_us={avg_ms * 1000:.2f} "
-        f"GB/s_oneway={gbps_one_way:.2f} "
-        f"GB/s_readwrite={gbps_read_write:.2f}"
+        f"bandwidth_GBps={bandwidth_GBs:.2f}"
     )
 
 

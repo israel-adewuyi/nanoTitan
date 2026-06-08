@@ -9,9 +9,9 @@ using namespace std;
 using Vec = uint4;
 
 template <typename T>
-__global__ void copy_kernel_scalar(T* src, T* dest, long long N){
+__global__ void copy_kernel_scalar(T* src, T* dest, uint64_t N){
     // get global index
-    long long i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint64_t i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(i < N){
         dest[i] = src[i];
@@ -19,20 +19,20 @@ __global__ void copy_kernel_scalar(T* src, T* dest, long long N){
 }
 
 template <typename T>
-__global__ void copy_kernel_vector(T* src, T* dest, int N){
+__global__ void copy_kernel_vector(T* src, T* dest, uint64_t N){
     // get global index
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint64_t i = blockIdx.x * blockDim.x + threadIdx.x;
 
     // We assume total bytes is divisible by int4 (16 bytes)
-    int totalBytes = N * sizeof(T);
-    int vecN = totalBytes / sizeof(Vec);
+    uint64_t totalBytes = N * sizeof(T);
+    uint64_t vecN = totalBytes / sizeof(Vec);
 
     if(i < vecN){
         reinterpret_cast<Vec*>(dest)[i] = reinterpret_cast<Vec*>(src)[i];
     }
 }
 
-void copy_scalar(torch::Tensor src, torch::Tensor dest, long long N){
+void copy_scalar(torch::Tensor src, torch::Tensor dest, uint64_t N){
     int threads = 256;
     int blocks  = (src.numel() + threads - 1) / threads;
 
@@ -46,7 +46,7 @@ void copy_scalar(torch::Tensor src, torch::Tensor dest, long long N){
             copy_kernel_scalar<T><<<blocks, threads>>>(
                 src.data_ptr<T>(),
                 dest.data_ptr<T>(),
-                static_cast<long long>(src.numel())
+                static_cast<uint64_t>(src.numel())
             );
         }
     );
