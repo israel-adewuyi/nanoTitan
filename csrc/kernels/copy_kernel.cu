@@ -6,7 +6,7 @@
 #include <vector>
 
 using namespace std;
-using Vec uint4;
+using Vec = uint4;
 
 template <typename T>
 __global__ void copy_kernel_scalar(T* src, T* dest, int N){
@@ -27,12 +27,11 @@ __global__ void copy_kernel_vector(T* src, T* dest, int N){
     int totalBytes = N * sizeof(T);
     int vecN = totalBytes / sizeof(Vec);
 
-    if(i < N){
+    if(i < vecN){
         reinterpret_cast<Vec*>(dest)[i] = reinterpret_cast<Vec*>(src)[i];
     }
 }
 
-template <typename T>
 void copy_scalar(torch::Tensor src, torch::Tensor dest, int N){
     int threads = 256;
     int blocks  = (src.numel() + threads - 1) / threads;
@@ -44,7 +43,11 @@ void copy_scalar(torch::Tensor src, torch::Tensor dest, int N){
         "copy_scalar",
         [&] {
             using T = scalar_t;
-            copy_kernel_scalar<T><<<blocks, threads>>>(src.data(), dest.data(), src.numel());
+            copy_kernel_scalar<T><<<blocks, threads>>>(
+                src.data_ptr<T>(),
+                dest.data_ptr<T>(),
+                src.numel()
+            );
         }
     );
 }
