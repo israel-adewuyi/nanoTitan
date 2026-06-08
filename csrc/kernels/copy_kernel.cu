@@ -9,9 +9,9 @@ using namespace std;
 using Vec = uint4;
 
 template <typename T>
-__global__ void copy_kernel_scalar(T* src, T* dest, int N){
+__global__ void copy_kernel_scalar(T* src, T* dest, long long N){
     // get global index
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    long long i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if(i < N){
         dest[i] = src[i];
@@ -32,7 +32,7 @@ __global__ void copy_kernel_vector(T* src, T* dest, int N){
     }
 }
 
-void copy_scalar(torch::Tensor src, torch::Tensor dest, int N){
+void copy_scalar(torch::Tensor src, torch::Tensor dest, long long N){
     int threads = 256;
     int blocks  = (src.numel() + threads - 1) / threads;
 
@@ -46,7 +46,7 @@ void copy_scalar(torch::Tensor src, torch::Tensor dest, int N){
             copy_kernel_scalar<T><<<blocks, threads>>>(
                 src.data_ptr<T>(),
                 dest.data_ptr<T>(),
-                src.numel()
+                static_cast<long long>(src.numel())
             );
         }
     );

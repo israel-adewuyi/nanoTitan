@@ -1,8 +1,8 @@
-import random_ext
 import torch
+import random_ext
 
 
-def bench_copy(dtype, numel, iters=100, warmup=20):
+def bench_copy(dtype, numel, iters=1000, warmup=20):
     device = "cuda"
     src = torch.randn(numel, device=device, dtype=dtype)
     dst = torch.empty_like(src)
@@ -45,9 +45,9 @@ def bench_copy(dtype, numel, iters=100, warmup=20):
 
 def main():
     sizes_bytes = [
-        64 * 1024 * 1024,
-        256 * 1024 * 1024,
         1024 * 1024 * 1024,
+        4 * 1024 * 1024 * 1024,
+        8 * 1024 * 1024 * 1024,
     ]
 
     for dtype in [torch.float32, torch.float16, torch.bfloat16]:
