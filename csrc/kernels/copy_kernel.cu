@@ -3,6 +3,7 @@
 #include <cuda_check.h>
 #include <iostream>
 #include <cassert>
+#include <cstdint>
 #include <vector>
 
 using namespace std;
@@ -51,6 +52,24 @@ void copy_scalar(torch::Tensor src, torch::Tensor dest, uint64_t N){
         }
     );
 }
+
+void copy_vector(torch::Tensor src, torch::Tensor dest){
+    size_t vecN = (src.numel() * src.element_size()) / sizeof(Vec);
+    assert (sizeof(Vec) == 16);
+    int threads = 256;
+    int blocks = (vecN + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::kHalf, at::kBFloat16, src.scalar_type(), "copy_vector", [&] {
+        using T = scalar_t;
+        copy_kernel_vector<T><<<blocks, threads>>>(
+            src.data_ptr<T>(),
+            dest.data_ptr<T>(),
+            static_cast<uint64_t>(src.numel())
+            );
+        }
+    );
+}
+
 
 // int main(){
 //     int N;
