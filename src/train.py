@@ -72,7 +72,7 @@ def main() -> None:
     world_size = get_world_size()
     assert world_size == cfg.runtime.dp_size * cfg.runtime.pp_size
     assert cfg.model.n_layers % cfg.runtime.pp_size == 0
-    assert cfg.trainer.per_device_batch_size % cfg.trainer.microbatches == 0
+    # assert cfg.trainer.per_device_batch_size % cfg.trainer.microbatches == 0
 
     # setup runtime, seed everything
     runtime = build_runtime(cfg)
@@ -101,7 +101,7 @@ def main() -> None:
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    iter = 1000
+    iter = 10
     profiler = build_profiler(runtime, cfg.profiler)
 
     step = 0

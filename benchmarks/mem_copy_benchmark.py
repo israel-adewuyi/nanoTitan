@@ -5,14 +5,14 @@ import torch
 
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    src = torch.randn(1024, device=device)
+    src = torch.randn(8192, device=device)
     dst = torch.empty_like(src)
 
     start = time.perf_counter()
     try:
-        import benchmarks
+        import random_ext
 
-        benchmarks.copy_scalar(src, dst, src.numel())
+        random_ext.copy_scalar(src, dst, src.numel())
     except Exception:
         dst.copy_(src)
 
