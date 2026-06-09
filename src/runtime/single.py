@@ -123,7 +123,7 @@ class SingleDeviceRuntime(Runtime):
     def backward(self, loss, model):
         loss.backward()
 
-    def is_main_process(self):
+    def is_main_rank(self):
         return True
 
     def finalize_backward(self):
