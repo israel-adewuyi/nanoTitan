@@ -1,19 +1,22 @@
 run_name = "single_gpu_8M_batch_size=8_seq_len=1024_steps=1000"
+track_backward_time = true
 
 [model]
 vocab_size = 50257
 d_model = 128
-max_seq_len = 1024
+max_seq_len = 512
 n_layers = 8
 d_head = 16
 n_heads = 8
 ffn_in = 512
+num_experts = 16
+top_k = 2
 
 [trainer]
 seed = 42
 device_id = 3
 eval_every_step = -1
-per_device_batch_size = 8
+per_device_batch_size = 2
 
 [data]
 train_tokens_path = "data/preprocessed/tinystories_train.bin"
@@ -28,11 +31,11 @@ lr = "1e-3"
 name = "single"
 
 [profiler]
-enabled = false
+enabled = true
 wait_steps = 2
 warmup_steps = 2
 active_steps = 6
 record_shapes = true
 profile_memory = true
-with_stack = false
+with_stack = true
 with_flops = false
