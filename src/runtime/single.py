@@ -3,6 +3,7 @@ import time
 
 import torch
 import torch.nn.functional as F
+from torch.profiler import record_function
 from torch.utils.data import DataLoader
 
 from src.data.dataset import PackedTokenDataset
@@ -68,7 +69,8 @@ class SingleDeviceRuntime(Runtime):
         y = y.to(self.device)
 
         # forward pass
-        logits = model(x)
+        with record_function("forward"):
+            logits = model(x)
 
         # compute loss
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
@@ -77,8 +79,9 @@ class SingleDeviceRuntime(Runtime):
             torch.cuda.synchronize(self.device)
         backward_start_time = time.perf_counter()
 
-        self.backward(loss, model)
-        self.finalize_backward()
+        with record_function("backward"):
+            self.backward(loss, model)
+            self.finalize_backward()
 
         if self.cfg.track_backward_time and self.device.type == "cuda":
             torch.cuda.synchronize(self.device)
@@ -94,7 +97,8 @@ class SingleDeviceRuntime(Runtime):
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
 
-        optimizer.step()
+        with record_function("optim_step"):
+            optimizer.step()
 
         metrics = {
             "train/loss": ScalarMetric(loss.item(), reduce="none"),
