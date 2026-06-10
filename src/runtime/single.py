@@ -121,11 +121,7 @@ class SingleDeviceRuntime(Runtime):
             total = counts.sum().clamp_min(1.0)
             load_frac = counts / total
 
-            for expert_idx, (count, frac) in enumerate(zip(counts, load_frac, strict=True)):
-                metrics[f"moe/layer_{layer_idx:02d}/expert_{expert_idx:02d}/tokens"] = ScalarMetric(
-                    count.item(),
-                    reduce="none",
-                )
+            for expert_idx, frac in enumerate(load_frac):
                 metrics[f"moe/layer_{layer_idx:02d}/expert_{expert_idx:02d}/load_frac"] = (
                     ScalarMetric(
                         frac.item(),
@@ -139,10 +135,6 @@ class SingleDeviceRuntime(Runtime):
             )
             metrics[f"moe/layer_{layer_idx:02d}/load_min_frac"] = ScalarMetric(
                 load_frac.min().item(),
-                reduce="none",
-            )
-            metrics[f"moe/layer_{layer_idx:02d}/load_cv"] = ScalarMetric(
-                (load_frac.std(unbiased=False) / load_frac.mean().clamp_min(1e-8)).item(),
                 reduce="none",
             )
             metrics[f"moe/layer_{layer_idx:02d}/unused_experts"] = ScalarMetric(
