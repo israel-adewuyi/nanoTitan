@@ -2,6 +2,7 @@ import torch
 
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
+from src.model.model import NanoTitanModel
 
 
 def make_test_config(d_model=8, num_experts=4, top_k=2):
@@ -42,3 +43,16 @@ def test_moe_output_shape():
 
     assert y.shape == x.shape
     assert tokens_per_expert.shape == (cfg.num_experts,)
+
+
+def test_model_can_return_moe_stats():
+    cfg = make_test_config()
+    model = NanoTitanModel(cfg)
+    input_ids = torch.zeros((2, cfg.max_seq_len), dtype=torch.long)
+
+    logits, moe_stats = model(input_ids, return_moe_stats=True)
+
+    assert logits.shape == (2, cfg.max_seq_len, cfg.vocab_size)
+    assert len(moe_stats) == cfg.n_layers
+    assert moe_stats[0].shape == (cfg.num_experts,)
+    assert moe_stats[0].sum().item() == input_ids.numel() * cfg.top_k

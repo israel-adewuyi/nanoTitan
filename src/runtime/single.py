@@ -70,7 +70,7 @@ class SingleDeviceRuntime(Runtime):
 
         # forward pass
         with record_function("forward"):
-            logits = model(x)
+            logits, moe_stats = model(x, return_moe_stats=True)
 
         # compute loss
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
@@ -108,6 +108,47 @@ class SingleDeviceRuntime(Runtime):
 
         if self.cfg.track_backward_time:
             metrics["stats/backward_time"] = ScalarMetric(backward_time, reduce="none")
+
+        metrics.update(self._moe_load_metrics(moe_stats))
+
+        return metrics
+
+    def _moe_load_metrics(self, moe_stats: list[torch.Tensor]) -> dict[str, ScalarMetric]:
+        metrics = {}
+
+        for layer_idx, tokens_per_expert in enumerate(moe_stats):
+            counts = tokens_per_expert.detach().float()
+            total = counts.sum().clamp_min(1.0)
+            load_frac = counts / total
+
+            for expert_idx, (count, frac) in enumerate(zip(counts, load_frac, strict=True)):
+                metrics[f"moe/layer_{layer_idx:02d}/expert_{expert_idx:02d}/tokens"] = ScalarMetric(
+                    count.item(),
+                    reduce="none",
+                )
+                metrics[f"moe/layer_{layer_idx:02d}/expert_{expert_idx:02d}/load_frac"] = (
+                    ScalarMetric(
+                        frac.item(),
+                        reduce="none",
+                    )
+                )
+
+            metrics[f"moe/layer_{layer_idx:02d}/load_max_frac"] = ScalarMetric(
+                load_frac.max().item(),
+                reduce="none",
+            )
+            metrics[f"moe/layer_{layer_idx:02d}/load_min_frac"] = ScalarMetric(
+                load_frac.min().item(),
+                reduce="none",
+            )
+            metrics[f"moe/layer_{layer_idx:02d}/load_cv"] = ScalarMetric(
+                (load_frac.std(unbiased=False) / load_frac.mean().clamp_min(1e-8)).item(),
+                reduce="none",
+            )
+            metrics[f"moe/layer_{layer_idx:02d}/unused_experts"] = ScalarMetric(
+                (counts == 0).sum().item(),
+                reduce="none",
+            )
 
         return metrics
 
