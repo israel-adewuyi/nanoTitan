@@ -164,11 +164,15 @@ class TransformerLayer(nn.Module):
         self.ffn_norm = LayerNorm(cfg)
 
     def forward(
-        self, x: torch.Tensor[Float, "batch seq_len d_model"]
-    ) -> torch.Tensor[Float, "batch seq_len d_model"]:
+        self,
+        x: torch.Tensor[Float, "batch seq_len d_model"],
+        return_moe_stats: bool = False,
+    ) -> torch.Tensor[Float, "batch seq_len d_model"] | tuple[torch.Tensor, torch.Tensor]:
         x = self.attn(self.attn_norm(x)) + x
-        out, _ = self.ffn(self.ffn_norm(x))
+        out, tokens_per_expert = self.ffn(self.ffn_norm(x))
         x = out + x
+        if return_moe_stats:
+            return x, tokens_per_expert
         return x
 
 
@@ -180,11 +184,20 @@ class NanoTitanModel(nn.Module):
         self.position_embed = PositionEmbed(cfg)
         self.layers = nn.ModuleList(TransformerLayer(cfg) for _ in range(cfg.n_layers))
 
-    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, input_ids: torch.Tensor, return_moe_stats: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
         token_emb = self.token_embed(input_ids)
         pos_embed = self.position_embed(token_emb)
         x = token_emb + pos_embed
+        moe_stats = []
         for layer in self.layers:
-            x = layer(x)
+            if return_moe_stats:
+                x, tokens_per_expert = layer(x, return_moe_stats=True)
+                moe_stats.append(tokens_per_expert.detach())
+            else:
+                x = layer(x)
         x = self.token_embed.project(x)
+        if return_moe_stats:
+            return x, moe_stats
         return x
