@@ -56,3 +56,20 @@ def test_model_can_return_moe_stats():
     assert len(moe_stats) == cfg.n_layers
     assert moe_stats[0].shape == (cfg.num_experts,)
     assert moe_stats[0].sum().item() == input_ids.numel() * cfg.top_k
+
+
+def test_model_active_parameter_count_uses_top_k_experts():
+    cfg = make_test_config()
+    model = NanoTitanModel(cfg)
+
+    token_embed_params = cfg.vocab_size * cfg.d_model
+    attention_params = 4 * cfg.d_model * cfg.d_head * cfg.n_heads
+    layer_norm_params = 4 * cfg.d_model
+    router_params = cfg.d_model * cfg.num_experts
+    expert_params = 3 * cfg.d_model * cfg.ffn_in + 2 * cfg.ffn_in + cfg.d_model
+    expected_active_params = token_embed_params + cfg.n_layers * (
+        attention_params + layer_norm_params + router_params + cfg.top_k * expert_params
+    )
+
+    assert model.total_parameter_count() == sum(param.numel() for param in model.parameters())
+    assert model.active_parameter_count() == expected_active_params

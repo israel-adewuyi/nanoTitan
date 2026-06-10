@@ -29,6 +29,9 @@ class FFN(nn.Module):
 
         return self.W_out(ffn_out)
 
+    def parameter_count(self) -> int:
+        return sum(param.numel() for param in self.parameters())
+
 
 class MoE(nn.Module):
     """
@@ -40,6 +43,11 @@ class MoE(nn.Module):
         self.cfg = cfg
         self.experts = nn.ModuleList(FFN(cfg) for _ in range(self.cfg.num_experts))
         self.router = nn.Linear(self.cfg.d_model, self.cfg.num_experts, bias=False)
+
+    def active_parameter_count(self) -> int:
+        router_params = sum(param.numel() for param in self.router.parameters())
+        expert_params = self.experts[0].parameter_count()
+        return router_params + self.cfg.top_k * expert_params
 
     def forward(self, x: Float[torch.Tensor, "batch seq_len d_model"]) -> tuple:
         batch, seq_len, d_model = x.shape

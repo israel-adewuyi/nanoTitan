@@ -92,10 +92,16 @@ def main() -> None:
     model = runtime.prepare_model(raw_model)
 
     if runtime.is_main_rank():
+        total_params = raw_model.total_parameter_count()
+        active_params = raw_model.active_parameter_count()
         # Some detail logs about model and args
         logger.info("Loaded model config from %s", normalize_config_arg(args.config))
         logger.info("Model config: %s", cfg.model.model_dump())
-        logger.info("Number of parameters: %s", sum(p.numel() for p in model.parameters()))
+        logger.info(
+            "Number of parameters: %.2fM total, %.2fM active",
+            total_params / 1e6,
+            active_params / 1e6,
+        )
         logger.info(f"Runtime is {cfg.runtime.name}")
 
     # Setup the optimizer

@@ -11,6 +11,10 @@ from src.config import ModelConfig
 from src.model.feed_fwd import MoE
 
 
+def _parameter_count(module: nn.Module) -> int:
+    return sum(param.numel() for param in module.parameters())
+
+
 class TokenEmbed(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -163,6 +167,14 @@ class TransformerLayer(nn.Module):
         self.attn_norm = LayerNorm(cfg)
         self.ffn_norm = LayerNorm(cfg)
 
+    def active_parameter_count(self) -> int:
+        return (
+            _parameter_count(self.attn)
+            + _parameter_count(self.attn_norm)
+            + _parameter_count(self.ffn_norm)
+            + self.ffn.active_parameter_count()
+        )
+
     def forward(
         self,
         x: torch.Tensor[Float, "batch seq_len d_model"],
@@ -183,6 +195,14 @@ class NanoTitanModel(nn.Module):
         self.token_embed = TokenEmbed(cfg)
         self.position_embed = PositionEmbed(cfg)
         self.layers = nn.ModuleList(TransformerLayer(cfg) for _ in range(cfg.n_layers))
+
+    def total_parameter_count(self) -> int:
+        return _parameter_count(self)
+
+    def active_parameter_count(self) -> int:
+        return _parameter_count(self.token_embed) + sum(
+            layer.active_parameter_count() for layer in self.layers
+        )
 
     def forward(
         self, input_ids: torch.Tensor, return_moe_stats: bool = False
