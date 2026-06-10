@@ -33,6 +33,22 @@ __global__ void copy_kernel_vector(T* src, T* dest, uint64_t N){
     }
 }
 
+
+void peer_copy_scalar(torch::Tensor src, size_t src_device, torch::Tensor dest, size_t dest_device, size_t count){
+    TORCH_CHECK(src.is_contiguous(), "src must be contiguous");
+    TORCH_CHECK(dest.is_contiguous(), "dest must be contiguous");
+
+    c10::cuda::CUDAGuard guard(dest_device);
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream(dst_device);
+
+    CUDA_CHECK(cudaMemcpyPeerAsync(
+        dest.data_ptr(), dest_device,
+        src.data_ptr(), src_device,
+        static_cast<size_t>count, stream
+    ));
+}
+
+
 void copy_scalar(torch::Tensor src, torch::Tensor dest, uint64_t N){
     int threads = 256;
     int blocks  = (src.numel() + threads - 1) / threads;
