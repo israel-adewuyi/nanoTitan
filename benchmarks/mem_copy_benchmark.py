@@ -1,9 +1,13 @@
+import argparse
+
 import random_ext
 import torch
 
 
-def bench_copy_scalar(dtype, numel, iters=1000, warmup=20):
-    device = "cuda"
+def bench_copy_scalar(
+    dtype: torch.dtype, numel: int, device: int = 0, iters: int = 1000, warmup: int = 20
+):
+    device = f"cuda:{device}"
     src = torch.randn(numel, device=device, dtype=dtype)
     dst = torch.empty_like(src)
 
@@ -44,8 +48,10 @@ def bench_copy_scalar(dtype, numel, iters=1000, warmup=20):
     )
 
 
-def bench_copy_vector(dtype, numel, iters=1000, warmup=20):
-    device = "cuda"
+def bench_copy_vector(
+    dtype: torch.dtype, numel: int, device: int = 0, iters: int = 1000, warmup: int = 20
+):
+    device = f"cuda:{device}"
     src = torch.randn(numel, device=device, dtype=dtype)
     dst = torch.empty_like(src)
 
@@ -131,6 +137,13 @@ def bench_peer_copy_scalar(dtype, numel, iters=100, warmup=20):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Read a number of arguments from cmd line")
+    parser.add_argument(
+        "device", type=int, help="The GPU device to use for running tests", default=0
+    )
+
+    args = parser.parse_args()
+
     sizes_bytes = [
         1024 * 1024 * 1024,
         4 * 1024 * 1024 * 1024,
@@ -140,13 +153,13 @@ def main():
     for dtype in [torch.float32, torch.float16, torch.bfloat16]:
         for size_bytes in sizes_bytes:
             numel = size_bytes // torch.tensor([], dtype=dtype).element_size()
-            bench_copy_scalar(dtype, numel)
+            bench_copy_scalar(dtype, numel, args.device)
 
     print("=" * 32, "VECTOR COPY KERNEL", "=" * 32)
     for dtype in [torch.float32, torch.float16, torch.bfloat16]:
         for size_bytes in sizes_bytes:
             numel = size_bytes // torch.tensor([], dtype=dtype).element_size()
-            bench_copy_vector(dtype, numel)
+            bench_copy_vector(dtype, numel, args.device)
 
 
 if __name__ == "__main__":
