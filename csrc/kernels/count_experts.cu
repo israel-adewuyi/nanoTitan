@@ -27,12 +27,12 @@ __global__ void count_experts(
 }
 
 
-void count_expert_kernel(torch::Tensor topk_experts_per_token, torch::Tensor mask = nullptr, size_t K, size_t topK){
-    int N = topk_experts_per_token.shape[0] // Number of tokens
+void count_expert_kernel(torch::Tensor topk_experts_per_token, torch::Tensor mask = nullptr, size_t num_experts, size_t num_topk_experts){
+    int N = topk_experts_per_token.shape[0]; // Number of tokens
     int threads = 256;
     int blocks = (N + threads - 1) / threads;
 
-    cudaMemSet(expert_count, 0, K * sizeof(uint64_t));
+    cudaMemSet(expert_count, 0, num_experts * sizeof(uint64_t));
 
-    count_experts<<<blocks, threads>>>(top_ex-erts_per_token, mask, expert_count, topK, N);
+    count_experts<<<blocks, threads>>>(topk_experts_per_token, mask, expert_count, num_topk_experts, N);
 }
