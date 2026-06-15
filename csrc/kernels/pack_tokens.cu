@@ -8,11 +8,11 @@ __global__ void pack_tokens_kernel(
     size_t* topk_experts,                // [num_tokens, top_K]
     size_t topK,
     size_t total_assignments,
-    size_t* expert_offset_cpy, 
-    T* packed_X, 
-    size_t* packed_tokenId, 
-    size_t* packed_expert, 
-    T* packed_weights,
+    size_t* expert_offset_cpy,
+    T* packed_X,
+    size_t* packed_tokenId,
+    size_t* packed_expert,
+    T* packed_topk_weights,
     size_t d_model
 ){
     // Map logical threads to num_tokens * topK
@@ -34,7 +34,7 @@ __global__ void pack_tokens_kernel(
         slot = atomicAdd(&expert_offset_cpy[expert], 1);
         packed_tokenId[slot] = token_id;
         packed_expert[slot] = expert;
-        packed_weights[slot] = topk_weights[token_id * topK + expert_idx];
+        packed_topk_weights[slot] = topk_weights[token_id * topK + expert_idx];
     }
 
     __syncthreads();
