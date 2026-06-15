@@ -6,7 +6,12 @@ setup(
     ext_modules=[
         CUDAExtension(
             name="random_ext",
-            sources=["csrc/random.cpp", "csrc/bindings.cpp", "csrc/kernels/copy_kernel.cu"],
+            sources=[
+                "csrc/random.cpp",
+                "csrc/bindings.cpp",
+                "csrc/kernels/copy_kernel.cu",
+                "csrc/kernels/pack_tokens.cu",
+            ],
             include_dirs=["csrc", "csrc/runtime"],
         )
     ],

@@ -1,19 +1,20 @@
 #include <cuda_runtime.h>
+#include <torch/extension.h>
 
 
 template <typename T>
-__global__ void pack_tokens_kernel(
+__global__ void pack_tokens_kernel_cu(
     T* X,                                // [num_tokens, d_model]
     T* topk_weights,                     // [num_tokens, top_K]
-    size_t* topk_experts,                // [num_tokens, top_K]
+    int32_t* topk_experts,                // [num_tokens, top_K]
     size_t topK,
     size_t total_assignments,
-    size_t* expert_offset_cpy,
+    int32_t* expert_offset_cpy,
     T* packed_X,
-    size_t* packed_tokenId,
-    size_t* packed_expert,
+    int32_t* packed_tokenId,
+    int32_t* packed_expert,
     T* packed_topk_weights,
-    size_t d_model
+    size_t hidden_dim
 ){
     // Map logical threads to num_tokens * topK
     size_t assignment = blockIdx.x;
@@ -28,7 +29,7 @@ __global__ void pack_tokens_kernel(
     // Get the expert
     size_t expert = topk_experts[token_id * topK + expert_idx];
 
-    __shared__ size_t slot;
+    __shared__ int32_t slot;
 
     if(thread_idx == 0){
         slot = atomicAdd(&expert_offset_cpy[expert], 1);
@@ -39,39 +40,55 @@ __global__ void pack_tokens_kernel(
 
     __syncthreads();
 
-    for(size_t h = thread_idx; h < d_model; h += blockDim.x){
-        packed_X[slot * d_model + h] = X[token_id * d_model + h];
+    for(size_t h = thread_idx; h < hidden_dim; h += blockDim.x){
+        packed_X[slot * hidden_dim + h] = X[token_id * hidden_dim + h];
     }
 }
 
-//TODO: This should not be void...should be returning something. 
-void pack_tokens_kernel(
-    torch::Tensor X, 
-    torch::Tensor topk_weights,
-    torch::Tensor topk_experts,
-    size_t topK,
-    size_t total_assignments,
-    torch::Tensor expert_offset_cpy, 
-    torch::Tensor packed_X, 
-    torch::Tensor packed_tokenId, 
-    torch::Tensor packed_expert, 
-    torch::Tensor packed_weight
-    size_t hidden_dim){
-        size_t threads = 256;
-        size_t blocks = total_assignments;
 
-        pack_tokens<<<threads, blocks>>>(
-            X,
-            topk_weights,
-            topk_experts, 
-            topK, 
-            total_assignments, 
-            expert_offset_cpy,
-            packed_X, 
-            packed_tokenId, 
-            packed_expert, 
-            packed_weight, 
-            hidden_dim
-        )
-    }
+void pack_tokens_kernel(
+    torch::Tensor X,                   //[num_tokens, d_model]
+    torch::Tensor topk_weights,        //[num_tokens, topK]
+    torch::Tensor topk_experts,        //[num_tokens, topK]
+    size_t topK,
+    size_t total_assignments,          //[batch_size * seq_len * topK]
+    torch::Tensor expert_offset_cpy,   //[num_experts]
+    torch::Tensor packed_X,            //[num_tokens * topK, d_model]
+    torch::Tensor packed_tokenId,      //[num_tokens * topK]
+    torch::Tensor packed_expert,       //[num_tokens * topK]
+    torch::Tensor packed_topk_weights, //[num_tokens * topK]
+    size_t hidden_dim
+){
+    TORCH_CHECK(X.is_contiguous(), "X must be contiguous");
+    TORCH_CHECK(packed_X.is_contiguous(), "Packed X tensor must be contiguous");
+
+    TORCH_CHECK(X.scalar_type() == packed_X.scalar_type(),  "X and packed X should have the same dtype");
+    TORCH_CHECK(X.scalar_type() == topk_weights.scalar_type(), "X should have the same dtype as topK weights");
+    TORCH_CHECK(X.scalar_type() == packed_topk_weights.scalar_type(), "X should have the same dtype as packed weights");
+
+    size_t threads = 256;
+    size_t blocks = total_assignments;
+
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+        X.scalar_type(),
+        "pack_tokens_kernel",
+        [&] {
+            pack_tokens_kernel_cu<scalar_t><<<blocks, threads>>>(
+                X.data_ptr<scalar_t>(),
+                topk_weights.data_ptr<scalar_t>(),
+                topk_experts.data_ptr<int32_t>(), 
+                topK, 
+                total_assignments, 
+                expert_offset_cpy.data_ptr<int32_t>(),
+                packed_X.data_ptr<scalar_t>(),
+                packed_tokenId.data_ptr<int32_t>(), 
+                packed_expert.data_ptr<int32_t>(), 
+                packed_topk_weights.data_ptr<scalar_t>(), 
+                hidden_dim
+            );
+        }
+    );
+
+    
+}
     
