@@ -10,6 +10,6 @@ struct Tensor2D{
     int64_t stride1;
 
     __host__ __device__ T& operator()(int64_t i, int64_t j) const {
-        return ptr[i * stride0 + j * stride1]
+        return ptr[i * stride0 + j * stride1];
     }
 };
