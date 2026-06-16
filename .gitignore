@@ -17,3 +17,5 @@ wheels/
 */.ipynb_checkpoints/
 
 checklist.md
+repo_tree.py
+repo-tree.txt
