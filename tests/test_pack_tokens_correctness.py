@@ -1,5 +1,5 @@
-import random_ext
 import torch
+import random_ext
 
 # Will extend to include pack and combine when combine is fully implemented.
 

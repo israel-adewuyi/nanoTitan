@@ -1,6 +1,8 @@
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/extension.h>
 #include <cuda_runtime.h>
-#include <cuda_check.h>
+#include "cuda_check.h"
 #include <iostream>
 #include <cassert>
 #include <cstdint>
@@ -39,12 +41,12 @@ void peer_copy_scalar(torch::Tensor src, size_t src_device, torch::Tensor dest, 
     TORCH_CHECK(dest.is_contiguous(), "dest must be contiguous");
 
     c10::cuda::CUDAGuard guard(dest_device);
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream(dst_device);
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream(dest_device);
 
     CUDA_CHECK(cudaMemcpyPeerAsync(
         dest.data_ptr(), dest_device,
         src.data_ptr(), src_device,
-        static_cast<size_t>count, stream
+        static_cast<size_t>(count), stream
     ));
 }
 
