@@ -1,3 +1,4 @@
+#include <ATen/cuda/CUDAContext.h>
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 
@@ -6,7 +7,7 @@ template <typename T>
 __global__ void combine_tokens_kernel_cu(
     const T* __restrict__ expert_outputs,            //[assignments, d_model]
     const int32_t* __restrict__ packed_tokenId,       //[assignments]
-    const T* __restrict__ packed_topk_weights,       //[assignments]
+    const float* __restrict__ packed_topk_weights,       //[assignments]
     size_t d_model,
     float* combined_residual_stream,   //[num_tokens, d_model]
     int32_t num_assignments
@@ -25,7 +26,7 @@ __global__ void combine_tokens_kernel_cu(
     __syncthreads();
 
     for(size_t h = thread_idx; h < d_model; h += blockDim.x){
-        float weight = static_cast<float>(packed_topk_weights[assignment]);
+        float weight = packed_topk_weights[assignment];
         float value = static_cast<float>(expert_outputs[assignment * d_model + h]);
         atomicAdd(&combined_residual_stream[token_idx * d_model + h], weight * value);
     }
@@ -48,14 +49,16 @@ void combine_tokens_kernel(
     dim3 threads(256);
     dim3 blocks(num_assignments);
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+        at::ScalarType::Half,
+        at::ScalarType::BFloat16,
         expert_outputs.scalar_type(),
         "combine_tokens_kernel",
         [&] {
             combine_tokens_kernel_cu<scalar_t><<<blocks, threads>>>(
                 expert_outputs.data_ptr<scalar_t>(),
                 packed_tokenId.data_ptr<int32_t>(),
-                packed_topk_weights.data_ptr<scalar_t>(),
+                packed_topk_weights.data_ptr<float>(),
                 d_model,
                 combined_residual_stream.data_ptr<float>(),
                 num_assignments
