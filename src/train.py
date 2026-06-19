@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
-from src.dist_env import get_world_size
+from src.dist_env import get_world_size, init_distributed
 from src.model.model import NanoTitanModel
 from src.model_utils import get_layer_bounds
 from src.optim import setup_optimizer
@@ -71,6 +71,7 @@ def main() -> None:
 
     # get configs, run sanity checks for device mesh
     cfg = load_run_config(args.config)
+    init_distributed()
     world_size = get_world_size()
     assert world_size == cfg.runtime.dp_size * cfg.runtime.pp_size
     assert cfg.model.n_layers % cfg.runtime.pp_size == 0
@@ -90,9 +91,6 @@ def main() -> None:
 
     dims = get_parallel_dims(cfg.runtime)
     layer_bounds = get_layer_bounds(cfg, dims.pp_rank)
-
-    print(f"RANK =  {dims.global_rank}, layer_bounds = {layer_bounds}")
-
     # Setup the model
     raw_model = NanoTitanModel(cfg.model)
     runtime.register_model_stats(raw_model)
