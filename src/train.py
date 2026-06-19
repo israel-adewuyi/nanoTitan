@@ -11,7 +11,7 @@ from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import get_world_size, init_distributed
 from src.model.model import NanoTitanModel
-from src.model_utils import get_layer_bounds
+from src.model_utils import get_model_shard_specs
 from src.optim import setup_optimizer
 from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
@@ -90,9 +90,9 @@ def main() -> None:
     val_loader = runtime.prepare_valloader(val_dataset)
 
     dims = get_parallel_dims(cfg.runtime)
-    layer_bounds = get_layer_bounds(cfg, dims.pp_rank)
+    spec = get_model_shard_specs(dims, cfg)
     # Setup the model
-    raw_model = NanoTitanModel(cfg.model)
+    raw_model = NanoTitanModel.from_specs(cfg.model, spec)
     runtime.register_model_stats(raw_model)
     model = runtime.prepare_model(raw_model)
 

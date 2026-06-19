@@ -9,6 +9,7 @@ from jaxtyping import Float
 
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
+from src.model_utils import ModelShardSpec
 
 
 def _parameter_count(module: nn.Module) -> int:
@@ -189,22 +190,26 @@ class TransformerLayer(nn.Module):
 
 
 class NanoTitanModel(nn.Module):
-    def __init__(self, cfg: ModelConfig, initialize_entire_model: bool = True):
+    def __init__(self, cfg: ModelConfig):
         super().__init__()
-
         self.cfg = cfg
-        self.initialize_entire_model = initialize_entire_model
-        _initialize_model()
 
-    def _initialize_model(self):
-        if self.initialize_entire_model:
+        self.token_embed = TokenEmbed(self.cfg)
+        self.position_embed = PositionEmbed(self.cfg)
+        self.layers = nn.ModuleList(TransformerLayer(self.cfg) for _ in range(self.cfg.n_layers))
+
+    def from_specs(self, cfg: ModelConfig, spec: ModelShardSpec):
+        self.cfg = cfg
+        self.spec = spec
+
+        if spec.has_token_embed:
             self.token_embed = TokenEmbed(self.cfg)
+        if spec.has_pos_embed:
             self.position_embed = PositionEmbed(self.cfg)
-            self.layers = nn.ModuleList(
-                TransformerLayer(self.cfg) for _ in range(self.cfg.n_layers)
-            )
-        else:
-            pass
+
+        self.layers = nn.ModuleList(
+            TransformerLayer(self.cfg) for _ in range(spec.layer_start, spec.layer_end)
+        )
 
     def total_parameter_count(self) -> int:
         return _parameter_count(self)
