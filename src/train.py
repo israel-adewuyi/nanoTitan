@@ -11,7 +11,9 @@ from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import get_world_size
 from src.model.model import NanoTitanModel
+from src.model_utils import get_layer_bounds
 from src.optim import setup_optimizer
+from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
 from src.runtime import (
     DDPRuntime,
@@ -85,6 +87,11 @@ def main() -> None:
     val_dataset = PackedTokenDataset(path=cfg.data.val_tokens_path, seq_len=cfg.model.max_seq_len)
     train_loader = runtime.prepare_trainloader(train_dataset)
     val_loader = runtime.prepare_valloader(val_dataset)
+
+    dims = get_parallel_dims(cfg.runtime)
+    layer_bounds = get_layer_bounds(cfg, dims.pp_rank)
+
+    print(f"RANK =  {dims.global_rank}, layer_bounds = {layer_bounds}")
 
     # Setup the model
     raw_model = NanoTitanModel(cfg.model)

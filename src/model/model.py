@@ -189,12 +189,22 @@ class TransformerLayer(nn.Module):
 
 
 class NanoTitanModel(nn.Module):
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, initialize_entire_model: bool = True):
         super().__init__()
+
         self.cfg = cfg
-        self.token_embed = TokenEmbed(cfg)
-        self.position_embed = PositionEmbed(cfg)
-        self.layers = nn.ModuleList(TransformerLayer(cfg) for _ in range(cfg.n_layers))
+        self.initialize_entire_model = initialize_entire_model
+        _initialize_model()
+
+    def _initialize_model(self):
+        if self.initialize_entire_model:
+            self.token_embed = TokenEmbed(self.cfg)
+            self.position_embed = PositionEmbed(self.cfg)
+            self.layers = nn.ModuleList(
+                TransformerLayer(self.cfg) for _ in range(self.cfg.n_layers)
+            )
+        else:
+            pass
 
     def total_parameter_count(self) -> int:
         return _parameter_count(self)
