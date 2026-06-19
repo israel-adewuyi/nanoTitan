@@ -190,26 +190,31 @@ class TransformerLayer(nn.Module):
 
 
 class NanoTitanModel(nn.Module):
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec | None = None):
         super().__init__()
         self.cfg = cfg
-
-        self.token_embed = TokenEmbed(self.cfg)
-        self.position_embed = PositionEmbed(self.cfg)
-        self.layers = nn.ModuleList(TransformerLayer(self.cfg) for _ in range(self.cfg.n_layers))
-
-    def from_specs(self, cfg: ModelConfig, spec: ModelShardSpec):
-        self.cfg = cfg
         self.spec = spec
-
-        if spec.has_token_embed:
+        
+        if self.spec is None:    
             self.token_embed = TokenEmbed(self.cfg)
-        if spec.has_pos_embed:
             self.position_embed = PositionEmbed(self.cfg)
+            self.layers = nn.ModuleList(
+                TransformerLayer(self.cfg) for _ in range(spec.layer_start, spec.layer_end)
+            )
+        else:
+            if spec.has_token_embed:
+                self.token_embed = TokenEmbed(cfg)
 
-        self.layers = nn.ModuleList(
-            TransformerLayer(self.cfg) for _ in range(spec.layer_start, spec.layer_end)
-        )
+            if spec.has_pos_embed:
+                self.position_embed = PositionEmbed(cfg)
+
+            self.layers = nn.ModuleList(
+                TransformerLayer(cfg) for _ in range(spec.layer_start, spec.layer_end)
+            )
+    
+    @classmethod
+    def from_specs(cls, cfg: ModelConfig, spec: ModelShardSpec):
+        return cls(cfg, spec)
 
     def total_parameter_count(self) -> int:
         return _parameter_count(self)

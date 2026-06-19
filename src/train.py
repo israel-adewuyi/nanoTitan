@@ -90,9 +90,13 @@ def main() -> None:
     val_loader = runtime.prepare_valloader(val_dataset)
 
     dims = get_parallel_dims(cfg.runtime)
+    print(f"At rank {dims.global_rank}, {dims}")
     spec = get_model_shard_specs(dims, cfg)
+    print(f"At rank {dims.global_rank}, spec is {spec}")
     # Setup the model
     raw_model = NanoTitanModel.from_specs(cfg.model, spec)
+    print(raw_model)
+    return
     runtime.register_model_stats(raw_model)
     model = runtime.prepare_model(raw_model)
 
