@@ -1,14 +1,15 @@
-import torch
 import logging
-import torch.nn.functional as F
+
+import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 
 from src.config import AppConfig
-from src.parallel_dims import ParallelDims
 from src.model.model import NanoTitanModel
-
+from src.parallel_dims import ParallelDims
 
 logger = logging.getLogger(__name__)
+
 
 class PipelineParallel:
     def __init__(self, cfg: AppConfig, dim: ParallelDims):
@@ -39,7 +40,7 @@ class PipelineParallel:
                     f"At rank {self.dim.local_rank}!!! Receiving activations from rank {self.dim.prev_pp_rank}"
                 )
                 dist.recv(mb_x, self.dim.prev_pp_rank)
-            
+
             mb_x = model(mb_x)
 
             if self.dim.is_pp_last_stage:
@@ -48,7 +49,9 @@ class PipelineParallel:
                 loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
                 losses.append(loss)
             else:
-                logger.debug(f"Sending activations from rank {self.dim.local_rank} to rank {self.dim.next_pp_rank}")
+                logger.debug(
+                    f"Sending activations from rank {self.dim.local_rank} to rank {self.dim.next_pp_rank}"
+                )
                 dist.send(mb_x, self.dim.next_pp_rank)
                 losses.append(None)
 

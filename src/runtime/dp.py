@@ -3,14 +3,14 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from src.config import AppConfig
-from src.runtime.reducer import ReducerV1
-from src.parallel_dims import ParallelDims
 from src.data.dataset import PackedTokenDataset
+from src.parallel_dims import ParallelDims
+from src.runtime.reducer import ReducerV1
 
 
 class DataParallel:
     def __init__(self, cfg: AppConfig, dims: ParallelDims):
-        self.cfg = cfg 
+        self.cfg = cfg
         self.dims = dims
         self.device = f"cuda:{dims.local_rank}"
 
@@ -20,7 +20,7 @@ class DataParallel:
         src = self.dims.dp_group_ranks[0]
         for params in model.parameters():
             dist.broadcast(params, src=src, group=self.dims.dp_group)
-        
+
         self.reducer = ReducerV1(
             model, self.dims.dp_size, self.dims.dp_group_ranks, self.cfg.runtime.bucket_size
         )

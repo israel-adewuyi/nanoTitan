@@ -62,6 +62,7 @@ class PositionEmbed(nn.Module):
             )
         return self.pos_embed[:seq_len].unsqueeze(0)
 
+
 class EmbeddingBlock(nn.Module):
     def __init__(self, cfg: ModelConfig):
         self.cfg = cfg
@@ -70,6 +71,7 @@ class EmbeddingBlock(nn.Module):
 
     def forward(self, x: torch.Tensor):
         return self.token_embed(x) + self.position_embed(x)
+
 
 class LayerNorm(nn.Module):
     def __init__(self, cfg: ModelConfig):

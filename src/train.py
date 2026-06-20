@@ -4,27 +4,23 @@ import argparse
 import logging
 import time
 
-import torch
-import torch.nn.functional as F
-
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
-from src.dist_env import get_world_size, init_distributed, cleanup
+from src.dist_env import cleanup, get_world_size, init_distributed
 from src.model.model import NanoTitanModel
 from src.model_utils import get_model_shard_specs
 from src.optim import setup_optimizer
 from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
 from src.runtime import (
-    DDPRuntime,
     DataParallel,
+    DDPRuntime,
     DDPRuntimeRef,
     GPipePipelineParallel,
     NaivePipelineParallel,
     SingleDeviceRuntime,
 )
-from src.runtime.base import ScalarMetric
-from src.utils import load_run_config, normalize_config_arg, seed_everything, setup_logging
+from src.utils import load_run_config, seed_everything, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +120,7 @@ def main() -> None:
     optimizer = setup_optimizer(cfg.optim, model)
 
     # iter = 10
-    profiler = build_profiler(None, cfg.profiler) #TODO: Fixx
+    profiler = build_profiler(None, cfg.profiler)  # TODO: Fixx
 
     # step = 0
     try:
