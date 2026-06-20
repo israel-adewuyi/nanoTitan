@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
-from src.dist_env import get_world_size, init_distributed
+from src.dist_env import get_world_size, init_distributed, cleanup
 from src.model.model import NanoTitanModel
 from src.model_utils import get_model_shard_specs
 from src.optim import setup_optimizer
@@ -17,6 +17,7 @@ from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
 from src.runtime import (
     DDPRuntime,
+    DataParallel,
     DDPRuntimeRef,
     GPipePipelineParallel,
     NaivePipelineParallel,
@@ -89,109 +90,113 @@ def main() -> None:
     logger.debug(f"At rank {dims.global_rank}, spec is {spec}")
 
     # Setup the model
-    raw_model = NanoTitanModel.from_specs(cfg.model, spec)
-    # TODO: Sync weights across DP process group
-    logger.debug(raw_model)
+    model = NanoTitanModel.from_specs(cfg.model, spec)
+    dp = DataParallel(cfg, dims)
+    dp.prepare_model(model)
+    logger.debug(model)
 
     # Setup the data loader for train and test
     train_dataset = PackedTokenDataset(
         path=cfg.data.train_tokens_path, seq_len=cfg.model.max_seq_len
     )
     val_dataset = PackedTokenDataset(path=cfg.data.val_tokens_path, seq_len=cfg.model.max_seq_len)
-    train_loader = runtime.prepare_trainloader(train_dataset)
-    val_loader = runtime.prepare_valloader(val_dataset)
+    train_loader = dp.prepare_trainloader(train_dataset)
+    val_loader = dp.prepare_valloader(val_dataset)
 
-    return
-    runtime.register_model_stats(raw_model)
-    model = runtime.prepare_model(raw_model, dims)
+    # return
+    # runtime.register_model_stats(raw_model)
+    # model = runtime.prepare_model(raw_model, dims)
 
-    if runtime.is_main_rank():
-        total_params = raw_model.total_parameter_count()
-        active_params = raw_model.active_parameter_count()
-        # Some detail logs about model and args
-        logger.info("Loaded model config from %s", normalize_config_arg(args.config))
-        logger.info("Model config: %s", cfg.model.model_dump())
-        logger.info(
-            "Number of parameters: %.2fM total, %.2fM active",
-            total_params / 1e6,
-            active_params / 1e6,
-        )
-        logger.info(f"Runtime is {cfg.runtime.name}")
+    # if runtime.is_main_rank():
+    #     total_params = raw_model.total_parameter_count()
+    #     active_params = raw_model.active_parameter_count()
+    #     # Some detail logs about model and args
+    #     logger.info("Loaded model config from %s", normalize_config_arg(args.config))
+    #     logger.info("Model config: %s", cfg.model.model_dump())
+    #     logger.info(
+    #         "Number of parameters: %.2fM total, %.2fM active",
+    #         total_params / 1e6,
+    #         active_params / 1e6,
+    #     )
+    #     logger.info(f"Runtime is {cfg.runtime.name}")
 
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    iter = 10
-    profiler = build_profiler(runtime, cfg.profiler)
+    # iter = 10
+    profiler = build_profiler(None, cfg.profiler) #TODO: Fixx
 
-    step = 0
+    # step = 0
     try:
         if hasattr(train_loader.sampler, "set_epoch"):
             train_loader.sampler.set_epoch(0)
 
         with profiler as prof:
             step_start_time = time.perf_counter()
-            for x, y in train_loader:
-                step_metrics = runtime.train_step(model, (x, y), optimizer)
+            for batch in train_loader:
+                optimizer.zero_grad()
+                pp.train_step(model, batch)
+    #             step_metrics = runtime.train_step(model, (x, y), optimizer)
 
-                iter -= 1
+    #             iter -= 1
 
-                train_step_time = time.perf_counter() - step_start_time
-                tokens = (step + 1) * runtime.tokens_per_step
+    #             train_step_time = time.perf_counter() - step_start_time
+    #             tokens = (step + 1) * runtime.tokens_per_step
 
-                metrics = {
-                    "stats/tokens": ScalarMetric(tokens, reduce="none"),
-                    "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
-                }
+    #             metrics = {
+    #                 "stats/tokens": ScalarMetric(tokens, reduce="none"),
+    #                 "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
+    #             }
 
-                metrics.update(step_metrics)
+    #             metrics.update(step_metrics)
 
-                runtime.log(step, metrics)
+    #             runtime.log(step, metrics)
 
-                prof.step()
+    #             prof.step()
 
-                if iter == 0:
-                    break
+    #             if iter == 0:
+    #                 break
 
-                if cfg.trainer.eval_every_step != -1 and (
-                    cfg.trainer.eval_every_step == 0
-                    or (step + 1) % cfg.trainer.eval_every_step == 0
-                ):
-                    model.eval()
-                    total_loss = 0.0
-                    num_val_batches = 0
-                    val_start_time = time.perf_counter()
+    #             if cfg.trainer.eval_every_step != -1 and (
+    #                 cfg.trainer.eval_every_step == 0
+    #                 or (step + 1) % cfg.trainer.eval_every_step == 0
+    #             ):
+    #                 model.eval()
+    #                 total_loss = 0.0
+    #                 num_val_batches = 0
+    #                 val_start_time = time.perf_counter()
 
-                    with torch.no_grad():
-                        for val_x, val_y in val_loader:
-                            val_x = val_x.to(runtime.device)
-                            val_y = val_y.to(runtime.device)
+    #                 with torch.no_grad():
+    #                     for val_x, val_y in val_loader:
+    #                         val_x = val_x.to(runtime.device)
+    #                         val_y = val_y.to(runtime.device)
 
-                            logits = model(val_x)
-                            loss = F.cross_entropy(
-                                logits.reshape(-1, logits.size(-1)), val_y.reshape(-1)
-                            )
+    #                         logits = model(val_x)
+    #                         loss = F.cross_entropy(
+    #                             logits.reshape(-1, logits.size(-1)), val_y.reshape(-1)
+    #                         )
 
-                            total_loss += loss.item()
-                            num_val_batches += 1
+    #                         total_loss += loss.item()
+    #                         num_val_batches += 1
 
-                    val_time = time.perf_counter() - val_start_time
-                    val_loss = total_loss / num_val_batches
-                    if runtime.is_main_rank():
-                        logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
-                    runtime.log(
-                        step,
-                        {
-                            "val/loss": ScalarMetric(val_loss, reduce="mean"),
-                            "val/time": ScalarMetric(val_time, reduce="max"),
-                        },
-                    )
-                    model.train()
+    #                 val_time = time.perf_counter() - val_start_time
+    #                 val_loss = total_loss / num_val_batches
+    #                 if runtime.is_main_rank():
+    #                     logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
+    #                 runtime.log(
+    #                     step,
+    #                     {
+    #                         "val/loss": ScalarMetric(val_loss, reduce="mean"),
+    #                         "val/time": ScalarMetric(val_time, reduce="max"),
+    #                     },
+    #                 )
+    #                 model.train()
 
-                step += 1
-                step_start_time = time.perf_counter()
+    #             step += 1
+    #             step_start_time = time.perf_counter()
     finally:
-        runtime.cleanup()
+        cleanup()
+    cleanup()
 
 
 if __name__ == "__main__":

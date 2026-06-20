@@ -62,6 +62,14 @@ class PositionEmbed(nn.Module):
             )
         return self.pos_embed[:seq_len].unsqueeze(0)
 
+class EmbeddingBlock(nn.Module):
+    def __init__(self, cfg: ModelConfig):
+        self.cfg = cfg
+        self.token_embed = TokenEmbed(self.cfg)
+        self.position_embed = PositionEmbed(self.cfg)
+
+    def forward(self, x: torch.Tensor):
+        return self.token_embed(x) + self.position_embed(x)
 
 class LayerNorm(nn.Module):
     def __init__(self, cfg: ModelConfig):
@@ -194,6 +202,7 @@ class NanoTitanModel(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.spec = spec
+        self.blocks = nn.ModuleList()
 
         if self.spec is None:
             self.token_embed = TokenEmbed(self.cfg)
@@ -202,15 +211,11 @@ class NanoTitanModel(nn.Module):
                 TransformerLayer(self.cfg) for _ in range(self.cfg.n_layers)
             )
         else:
-            if spec.has_token_embed:
-                self.token_embed = TokenEmbed(self.cfg)
+            if self.spec.has_token_embed and self.spec.has_pos_embed:
+                self.blocks.append(EmbeddingBlock(cfg))
 
-            if spec.has_pos_embed:
-                self.position_embed = PositionEmbed(self.cfg)
-
-            self.layers = nn.ModuleList(
-                TransformerLayer(self.cfg) for _ in range(spec.layer_start, spec.layer_end)
-            )
+            for _ in range(self.spec.layer_start, self.spec.layer_end):
+                self.blocks.append(TransformerLayer(cfg))
 
     @classmethod
     def from_specs(cls, cfg: ModelConfig, spec: ModelShardSpec):
@@ -225,19 +230,18 @@ class NanoTitanModel(nn.Module):
         )
 
     def forward(
-        self, input_ids: torch.Tensor, return_moe_stats: bool = False
+        self, x: torch.Tensor, return_moe_stats: bool = False
     ) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
-        token_emb = self.token_embed(input_ids)
-        pos_embed = self.position_embed(token_emb)
-        x = token_emb + pos_embed
-        moe_stats = []
-        for layer in self.layers:
-            if return_moe_stats:
-                x, tokens_per_expert = layer(x, return_moe_stats=True)
-                moe_stats.append(tokens_per_expert.detach())
-            else:
-                x = layer(x)
-        x = self.token_embed.project(x)
-        if return_moe_stats:
-            return x, moe_stats
+        for block in self.blocks:
+            x = block(x)
+        # moe_stats = []
+        # for layer in self.layers:
+        #     if return_moe_stats:
+        #         x, tokens_per_expert = layer(x, return_moe_stats=True)
+        #         moe_stats.append(tokens_per_expert.detach())
+        #     else:
+        #         x = layer(x)
+        # x = self.token_embed.project(x)
+        # if return_moe_stats:
+        #     return x, moe_stats
         return x

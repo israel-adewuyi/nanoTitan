@@ -28,10 +28,27 @@ class ParallelDims:
         self.next_pp_rank = -1 if self.is_pp_last_stage else self.global_rank + 1
 
         self.dp_group_ranks = [dp * self.pp_size + self.pp_rank for dp in range(self.dp_size)]
-        self.dp_group = dist.new_group(self.dp_group_ranks)
+        self.dp_group = None
+
+        # create all DP groups in deterministic order
+        for pp_rank in range(self.pp_size):
+            ranks = [dp * self.pp_size + pp_rank for dp in range(self.dp_size)]
+            group = dist.new_group(ranks=ranks)
+
+            if self.pp_rank == pp_rank:
+                self.dp_group_ranks = ranks
+                self.dp_group = group
 
         self.pp_group_ranks = [pp + self.dp_rank * self.pp_size for pp in range(self.pp_size)]
-        self.pp_group = dist.new_group(self.pp_group_ranks)
+        self.pp_group = None
+        # create all PP groups in deterministic order
+        for dp_rank in range(self.dp_size):
+            ranks = [dp_rank * self.pp_size + pp for pp in range(self.pp_size)]
+            group = dist.new_group(ranks=ranks)
+
+            if self.dp_rank == dp_rank:
+                self.pp_group_ranks = ranks
+                self.pp_group = group
 
 
 def get_parallel_dims(config: RuntimeConfig):

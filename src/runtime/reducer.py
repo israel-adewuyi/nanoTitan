@@ -36,6 +36,7 @@ class ReducerV1:
         self, model: NanoTitanModel, group_size: int, process_group: list, bucket_size: int
     ):
         self.group_size = group_size
+        self.process_group = process_group
         self.params = [p for p in model.parameters() if p.requires_grad]
         self.hook_handles = []
         self.bucket_size = bucket_size * 1024 * 1024
