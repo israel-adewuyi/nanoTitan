@@ -65,6 +65,7 @@ class PositionEmbed(nn.Module):
 
 class EmbeddingBlock(nn.Module):
     def __init__(self, cfg: ModelConfig):
+        super().__init__()
         self.cfg = cfg
         self.token_embed = TokenEmbed(self.cfg)
         self.position_embed = PositionEmbed(self.cfg)

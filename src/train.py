@@ -16,6 +16,7 @@ from src.runtime import (
     DataParallel,
     DDPRuntime,
     DDPRuntimeRef,
+    PipelineParallel,
     GPipePipelineParallel,
     NaivePipelineParallel,
     SingleDeviceRuntime,
@@ -88,6 +89,7 @@ def main() -> None:
     # Setup the model
     model = NanoTitanModel.from_specs(cfg.model, spec)
     dp = DataParallel(cfg, dims)
+    pp = PipelineParallel(cfg, dims)
     dp.prepare_model(model)
     logger.debug(model)
 
@@ -119,7 +121,7 @@ def main() -> None:
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    # iter = 10
+    iter = 1
     profiler = build_profiler(None, cfg.profiler)  # TODO: Fixx
 
     # step = 0
@@ -131,10 +133,11 @@ def main() -> None:
             step_start_time = time.perf_counter()
             for batch in train_loader:
                 optimizer.zero_grad()
+                print(f"At global rank {dims.global_rank}, dp rank = {dims.dp_rank}, pp rank = {dims.pp_rank} Calling step at iter {iter}")
                 pp.train_step(model, batch)
     #             step_metrics = runtime.train_step(model, (x, y), optimizer)
 
-    #             iter -= 1
+                iter -= 1
 
     #             train_step_time = time.perf_counter() - step_start_time
     #             tokens = (step + 1) * runtime.tokens_per_step
@@ -150,8 +153,8 @@ def main() -> None:
 
     #             prof.step()
 
-    #             if iter == 0:
-    #                 break
+                if iter == 0:
+                    break
 
     #             if cfg.trainer.eval_every_step != -1 and (
     #                 cfg.trainer.eval_every_step == 0

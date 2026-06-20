@@ -46,6 +46,7 @@ class PipelineParallel:
             if self.dim.is_pp_last_stage:
                 # compute loss here
                 mb_y = mb_y.to(self.device)
+                print(f"At rank {self.dim.global_rank}, shapes are x -> {mb_x.shape}, y -> {mb_y.shape}")
                 loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
                 losses.append(loss)
             else:
