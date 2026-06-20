@@ -74,6 +74,16 @@ class EmbeddingBlock(nn.Module):
         return self.token_embed(x) + self.position_embed(x)
 
 
+class Unembed(nn.Module):
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.cfg = cfg
+        self.unembed = nn.Linear(self.cfg.d_model, self.cfg.vocab_size, bias=False)
+
+    def forward(self, x: torch.Tensor):
+        return self.unembed(x)
+
+
 class LayerNorm(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -219,6 +229,9 @@ class NanoTitanModel(nn.Module):
 
             for _ in range(self.spec.layer_start, self.spec.layer_end):
                 self.blocks.append(TransformerLayer(cfg))
+
+            if self.spec.has_unembed_head:
+                self.blocks.append(Unembed(self.cfg))
 
     @classmethod
     def from_specs(cls, cfg: ModelConfig, spec: ModelShardSpec):
