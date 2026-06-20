@@ -261,3 +261,13 @@ class NanoTitanModel(nn.Module):
         # if return_moe_stats:
         #     return x, moe_stats
         return x
+
+    def get_incoming_acts_grad(self, microbatch_idx: int = 0):
+        return self.stage_inputs[microbatch_idx].grad
+
+    def get_outgoing_acts(self, microbatch_idx: int = 0):
+        return self.stage_outputs[microbatch_idx]
+
+    def clear_cached_acts(self) -> None:
+        self.stage_inputs = []
+        self.stage_outputs = []

@@ -16,6 +16,8 @@ class PipelineParallel:
         self.cfg = cfg
         self.dim = dim
         self.device = f"cuda:{dim.local_rank}"
+        self.stage_inputs = []
+        self.stage_outputs = []
 
     def train_step(self, model: NanoTitanModel, batch):
         x, y = batch
@@ -39,22 +41,78 @@ class PipelineParallel:
                 logger.debug(
                     f"At rank {self.dim.local_rank}!!! Receiving activations from rank {self.dim.prev_pp_rank}"
                 )
-                dist.recv(mb_x, self.dim.prev_pp_rank)
+                dist.recv(mb_x, src=self.dim.prev_pp_rank, group=self.dim.pp_group)
+                mb_x.requires_grad_()
+                self.stage_inputs.append(mb_x)
 
             mb_x = model(mb_x)
 
             if self.dim.is_pp_last_stage:
                 # compute loss here
                 mb_y = mb_y.to(self.device)
-                print(f"At rank {self.dim.global_rank}, shapes are x -> {mb_x.shape}, y -> {mb_y.shape}")
+                print(
+                    f"At rank {self.dim.global_rank}, shapes are x -> {mb_x.shape}, y -> {mb_y.shape}"
+                )
                 loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
                 losses.append(loss)
             else:
                 logger.debug(
                     f"Sending activations from rank {self.dim.local_rank} to rank {self.dim.next_pp_rank}"
                 )
-                dist.send(mb_x, self.dim.next_pp_rank)
+                # mb_x = mb_x.detach()
+                # mb_x.requires_grad_()
+                self.stage_outputs.append(mb_x)
+
+                dist.send(mb_x, dst=self.dim.next_pp_rank, group=self.dim.pp_group)
                 losses.append(None)
+
+        # Backward pass
+        for microbatch_idx in reversed(range(self.cfg.runtime.num_microbatches)):
+            loss = (
+                losses[microbatch_idx - 1] / self.cfg.runtime.num_microbatches
+                if self.dim.is_pp_last_stage
+                else None
+            )
+            self.backward(loss, model, microbatch_idx - 1)
+
+        self.finalize_backward()
+
+        metrics = {
+            "train/loss": ScalarMetric(
+                sum(losses).item() if self.dim.is_pp_last_stage else 0.0,
+                reduce="sum",
+            ),
+        }
+
+        return metrics
+
+    def backward(self, loss, model, microbatch_idx):
+        if self.dim.is_pp_last_stage:
+            loss.backward()
+        else:
+            out_acts = self.stage_outputs[microbatch_idx]
+            out_acts_grad = torch.empty(
+                (
+                    self.microbatch_size,
+                    self.cfg.model.max_seq_len,
+                    self.cfg.model.d_model,
+                ),
+                device=self.device,
+            )
+            dist.recv(out_acts_grad, src=self.dim.next_pp_rank, group=self.dim.pp_group)
+            out_acts.backward(out_acts_grad)
+
+        # incoming.backward()
+        if not self.dim.is_pp_first_stage:
+            dist.send(
+                self.stage_inputs[microbatch_idx].grad,
+                dst=self.dim.prev_pp_rank,
+                group=self.dim.pp_group,
+            )
+
+    def finalize_backward(self):
+        self.stage_inputs = []
+        self.stage_outputs = []
 
     def prepare_microbatch(self, x, y) -> None:
         batch_size = x.shape[0]

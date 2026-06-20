@@ -16,9 +16,9 @@ from src.runtime import (
     DataParallel,
     DDPRuntime,
     DDPRuntimeRef,
-    PipelineParallel,
     GPipePipelineParallel,
     NaivePipelineParallel,
+    PipelineParallel,
     SingleDeviceRuntime,
 )
 from src.utils import load_run_config, seed_everything, setup_logging
@@ -133,25 +133,29 @@ def main() -> None:
             step_start_time = time.perf_counter()
             for batch in train_loader:
                 optimizer.zero_grad()
-                print(f"At global rank {dims.global_rank}, dp rank = {dims.dp_rank}, pp rank = {dims.pp_rank} Calling step at iter {iter}")
+                print(
+                    f"At global rank {dims.global_rank}, dp rank = {dims.dp_rank}, pp rank = {dims.pp_rank} Calling step at iter {iter}"
+                )
                 pp.train_step(model, batch)
-    #             step_metrics = runtime.train_step(model, (x, y), optimizer)
+                dp.finalize_backward()
+                optimizer.step()
+                #             step_metrics = runtime.train_step(model, (x, y), optimizer)
 
                 iter -= 1
 
-    #             train_step_time = time.perf_counter() - step_start_time
-    #             tokens = (step + 1) * runtime.tokens_per_step
+                #             train_step_time = time.perf_counter() - step_start_time
+                #             tokens = (step + 1) * runtime.tokens_per_step
 
-    #             metrics = {
-    #                 "stats/tokens": ScalarMetric(tokens, reduce="none"),
-    #                 "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
-    #             }
+                #             metrics = {
+                #                 "stats/tokens": ScalarMetric(tokens, reduce="none"),
+                #                 "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
+                #             }
 
-    #             metrics.update(step_metrics)
+                #             metrics.update(step_metrics)
 
-    #             runtime.log(step, metrics)
+                #             runtime.log(step, metrics)
 
-    #             prof.step()
+                #             prof.step()
 
                 if iter == 0:
                     break

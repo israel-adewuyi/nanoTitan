@@ -25,6 +25,9 @@ class DataParallel:
             model, self.dims.dp_size, self.dims.dp_group_ranks, self.cfg.runtime.bucket_size
         )
 
+    def finalize_backward(self):
+        self.reducer.finalize_backward()
+
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
         train_loader = DataLoader(
             train_dataset,
