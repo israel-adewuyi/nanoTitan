@@ -43,12 +43,14 @@ class DDPRuntime(Runtime):
             self.log_dir = self.metrics_logger.log_dir
             self.metrics_logger.log_config(self.cfg.model_dump())
 
-    def prepare_model(self, model: NanoTitanModel):
-        model = model.to(self.device)
+    def prepare_model(self, model: NanoTitanModel, dim):
+        model = model.to(self.device)  # TODO: In the grand scheme of things, this is wrong
         if self.cfg.runtime.reducer == "v0":
             self.reducer = ReducerV0(model, self.world_size)
         else:
-            self.reducer = ReducerV1(model, self.world_size, self.cfg.runtime.bucket_size)
+            self.reducer = ReducerV1(
+                model, dim.dp_size, dim.dp_group_ranks, self.cfg.runtime.bucket_size
+            )
         return model
 
     def log(self, step: int, values_to_log: dict[str, float]) -> None:

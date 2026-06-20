@@ -77,9 +77,21 @@ def main() -> None:
     assert cfg.model.n_layers % cfg.runtime.pp_size == 0
     # assert cfg.trainer.per_device_batch_size % cfg.trainer.microbatches == 0
 
-    # setup runtime, seed everything
-    runtime = build_runtime(cfg)
+    # seed everything
     seed_everything(cfg.trainer.seed)
+
+    # divide ranks into their respective process groups, based on the parallelism config
+    dims = get_parallel_dims(cfg.runtime)
+    logger.debug(f"At rank {dims.global_rank}, {dims}")
+
+    # allocate model layers to different ranks, including token, pos embed and umembed layer
+    spec = get_model_shard_specs(dims, cfg)
+    logger.debug(f"At rank {dims.global_rank}, spec is {spec}")
+
+    # Setup the model
+    raw_model = NanoTitanModel.from_specs(cfg.model, spec)
+    # TODO: Sync weights across DP process group
+    logger.debug(raw_model)
 
     # Setup the data loader for train and test
     train_dataset = PackedTokenDataset(
@@ -89,16 +101,9 @@ def main() -> None:
     train_loader = runtime.prepare_trainloader(train_dataset)
     val_loader = runtime.prepare_valloader(val_dataset)
 
-    dims = get_parallel_dims(cfg.runtime)
-    print(f"At rank {dims.global_rank}, {dims}")
-    spec = get_model_shard_specs(dims, cfg)
-    print(f"At rank {dims.global_rank}, spec is {spec}")
-    # Setup the model
-    raw_model = NanoTitanModel.from_specs(cfg.model, spec)
-    print(raw_model)
     return
     runtime.register_model_stats(raw_model)
-    model = runtime.prepare_model(raw_model)
+    model = runtime.prepare_model(raw_model, dims)
 
     if runtime.is_main_rank():
         total_params = raw_model.total_parameter_count()

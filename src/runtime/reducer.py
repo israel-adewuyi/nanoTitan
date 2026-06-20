@@ -32,8 +32,10 @@ class ReducerV1:
     1. dtype. What is the default now? Upside / downside to using any other??
     """
 
-    def __init__(self, model: NanoTitanModel, world_size: int, bucket_size: int):
-        self.world_size = world_size
+    def __init__(
+        self, model: NanoTitanModel, group_size: int, process_group: list, bucket_size: int
+    ):
+        self.group_size = group_size
         self.params = [p for p in model.parameters() if p.requires_grad]
         self.hook_handles = []
         self.bucket_size = bucket_size * 1024 * 1024
@@ -106,13 +108,15 @@ class ReducerV1:
         temp_bucket["ready_count"] += 1
 
         if temp_bucket["ready_count"] == len(temp_bucket["params"]):
-            work = dist.all_reduce(temp_bucket["buffer"], op=dist.ReduceOp.SUM, async_op=True)
+            work = dist.all_reduce(
+                temp_bucket["buffer"], op=dist.ReduceOp.SUM, group=self.process_group, async_op=True
+            )
             temp_bucket["work"] = work
 
     def finalize_backward(self):
         for bucket in self.buckets:
             bucket["work"].wait()
-            bucket["buffer"].div_(self.world_size)
+            bucket["buffer"].div_(self.group_size)
 
             for param in bucket["params"]:
                 start, end = self.param_to_offset[param]
