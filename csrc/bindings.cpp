@@ -5,7 +5,7 @@
 torch::Tensor random_op(torch::Tensor t, int x);
 void copy_scalar(torch::Tensor src, torch::Tensor dest, uint64_t N);
 void copy_vector(torch::Tensor src, torch::Tensor dest);
-void count_expert_kernel(torch::Tensor topk_experts_per_token, torch::Tensor mask, size_t num_experts, size_t num_topk_experts);
+torch::Tensor count_expert_kernel(torch::Tensor topk_experts_per_token, torch::Tensor mask, size_t num_experts, size_t num_topk_experts);
 void combine_tokens_kernel(
     torch::Tensor expert_outputs,          
     torch::Tensor packed_tokenId,      

@@ -27,7 +27,7 @@ __global__ void count_experts(
 }
 
 
-void count_expert_kernel(torch::Tensor topk_experts_per_token, torch::Tensor mask, size_t num_experts, size_t num_topk_experts){
+torch::Tensor count_expert_kernel(torch::Tensor topk_experts_per_token, torch::Tensor mask, size_t num_experts, size_t num_topk_experts){
     int N = topk_experts_per_token.size(0); // Number of tokens
     int threads = 256;
     int blocks = (N + threads - 1) / threads;
@@ -48,4 +48,5 @@ void count_expert_kernel(torch::Tensor topk_experts_per_token, torch::Tensor mas
         num_topk_experts,
         N
     );
+    return expert_count;
 }
