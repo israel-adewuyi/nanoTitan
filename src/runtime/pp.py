@@ -5,17 +5,20 @@ import torch.distributed as dist
 import torch.nn.functional as F
 
 from src.config import AppConfig
+from src.runtime.base import ScalarMetric
 from src.model.model import NanoTitanModel
 from src.parallel_dims import ParallelDims
+from src.runtime.reducer import ReducerV1
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineParallel:
-    def __init__(self, cfg: AppConfig, dim: ParallelDims):
+    def __init__(self, cfg: AppConfig, dim: ParallelDims, reducer: ReducerV1):
         self.cfg = cfg
         self.dim = dim
         self.device = f"cuda:{dim.local_rank}"
+        self.reducer = reducer
         self.stage_inputs = []
         self.stage_outputs = []
 
@@ -50,17 +53,12 @@ class PipelineParallel:
             if self.dim.is_pp_last_stage:
                 # compute loss here
                 mb_y = mb_y.to(self.device)
-                print(
-                    f"At rank {self.dim.global_rank}, shapes are x -> {mb_x.shape}, y -> {mb_y.shape}"
-                )
                 loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
                 losses.append(loss)
             else:
                 logger.debug(
                     f"Sending activations from rank {self.dim.local_rank} to rank {self.dim.next_pp_rank}"
                 )
-                # mb_x = mb_x.detach()
-                # mb_x.requires_grad_()
                 self.stage_outputs.append(mb_x)
 
                 dist.send(mb_x, dst=self.dim.next_pp_rank, group=self.dim.pp_group)
@@ -68,13 +66,15 @@ class PipelineParallel:
 
         # Backward pass
         for microbatch_idx in reversed(range(self.cfg.runtime.num_microbatches)):
+            self.reducer.backward_grad_sync = microbatch_idx == 0
             loss = (
-                losses[microbatch_idx - 1] / self.cfg.runtime.num_microbatches
+                losses[microbatch_idx] / self.cfg.runtime.num_microbatches
                 if self.dim.is_pp_last_stage
                 else None
             )
             self.backward(loss, model, microbatch_idx - 1)
 
+        self.reducer.prepare_missing_grad()
         self.finalize_backward()
 
         metrics = {
@@ -113,6 +113,7 @@ class PipelineParallel:
     def finalize_backward(self):
         self.stage_inputs = []
         self.stage_outputs = []
+        self.reducer.finalize_backward()
 
     def prepare_microbatch(self, x, y) -> None:
         batch_size = x.shape[0]

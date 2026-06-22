@@ -1,3 +1,4 @@
+import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -9,20 +10,32 @@ from src.runtime.reducer import ReducerV1
 
 
 class DataParallel:
+    """
+        The DataParallel class handles all things related to data parallel, from registering hooks 
+        on params and dividing params in to buckets, to running AllReduce after .grad has been 
+        computed for all the params. 
+    """
     def __init__(self, cfg: AppConfig, dims: ParallelDims):
         self.cfg = cfg
         self.dims = dims
         self.device = f"cuda:{dims.local_rank}"
 
     def prepare_model(self, model):
+        """
+            This method 
+            1. syncs the parameters across the dp_group to ensure state_dict is equal at the starts
+            2. calls the reducer which registers hooks and divy parameters into buckets
+        """
         model = model.to(self.device)
 
         src = self.dims.dp_group_ranks[0]
-        for params in model.parameters():
-            dist.broadcast(params, src=src, group=self.dims.dp_group)
+        
+        with torch.no_grad():
+            for params in model.parameters():
+                dist.broadcast(params, src=src, group=self.dims.dp_group, async_op=False)
 
         self.reducer = ReducerV1(
-            model, self.dims.dp_size, self.dims.dp_group_ranks, self.cfg.runtime.bucket_size
+            model, self.dims.dp_size, self.dims.dp_group, self.cfg.runtime.bucket_size
         )
 
     def finalize_backward(self):
