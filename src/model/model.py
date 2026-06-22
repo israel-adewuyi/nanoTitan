@@ -101,7 +101,7 @@ class LayerNorm(nn.Module):
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
     ) -> torch.Tensor[Float, "batch seq_len d_model"]:
         x_mean = x.mean(dim=-1, keepdim=True)
-        x_var = x.var(dim=-1, keepdim=True)
+        x_var = x.var(dim=-1, keepdim=True, correction=0)
         normalized_x = (x - x_mean) / torch.sqrt(x_var + 1e-8)
         return normalized_x * self.gamma + self.beta
 

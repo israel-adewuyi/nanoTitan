@@ -42,6 +42,7 @@ class ReducerV1:
         self.hook_handles = []
         self.bucket_size = bucket_size * 1024 * 1024
         self.backward_grad_sync = False
+        self.ready_for_sync = set()
 
         self.initialize_buckets()
 
@@ -112,8 +113,10 @@ class ReducerV1:
             zero-ing them and calling reduce_grad. 
         """
         for p in self.params:
-            if p.grad is None:
-                p.grad = torch.zeros_like(p)
+            if p not in self.ready_for_sync:
+                grad = p.grad
+                if grad is None:
+                    p.grad = torch.zeros_like(p)
                 self.reduce_grad(p)
 
 
@@ -126,7 +129,9 @@ class ReducerV1:
             filled up, launch AllReduce and store the work handle
         """
         if self.backward_grad_sync is False:
-            return 
+            return
+
+        self.ready_for_sync.add(param)
 
         temp_bucket = self.buckets[self.param_to_bucket[param]]
         grad = param.grad
@@ -157,3 +162,4 @@ class ReducerV1:
             bucket["ready_count"] = 0
             bucket["work"] = None
             self.backward_grad_sync = False
+            self.ready_for_sync.clear()

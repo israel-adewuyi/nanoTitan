@@ -49,21 +49,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_runtime(cfg: AppConfig):
-    if cfg.runtime.name == "single":
-        return SingleDeviceRuntime(cfg)
-    elif cfg.runtime.name == "ddp_reference":
-        return DDPRuntimeRef(cfg)
-    elif cfg.runtime.name == "ddp":
-        return DDPRuntime(cfg)
-    elif cfg.runtime.name == "naive_pp":
-        return NaivePipelineParallel(cfg)
-    elif cfg.runtime.name == "pp_gpipe":
-        return GPipePipelineParallel(cfg)
-    else:
-        raise ValueError(f"Runtime of name {cfg.runtime.name} hasn't been implemented yet.")
-
-
 def main() -> None:
     args = parse_args()
     setup_logging(args.log_level)
@@ -118,7 +103,7 @@ def main() -> None:
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    iter = 10
+    iter = 1
     profiler = build_profiler(None, cfg.profiler)  # TODO: Fixx
 
     # step = 0
@@ -130,9 +115,6 @@ def main() -> None:
             step_start_time = time.perf_counter()
             for batch in train_loader:
                 optimizer.zero_grad()
-                # print(
-                #     f"At global rank {dims.global_rank}, dp rank = {dims.dp_rank}, pp rank = {dims.pp_rank} Calling step at iter {iter}"
-                # )
                 metrics = pp.train_step(model, batch)
                 # dp.finalize_backward()
                 optimizer.step()
