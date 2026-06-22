@@ -93,6 +93,7 @@ class ModelConfig(BaseModel):
     positional_embedding: PositionalEmbeddingConfig = Field(
         default_factory=PositionalEmbeddingConfig
     )
+    moe_backend: str = "torch"
 
     @model_validator(mode="after")
     def validate_embedding_compatibility(self) -> ModelConfig:

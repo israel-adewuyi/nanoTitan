@@ -67,7 +67,7 @@ class CUDAMoEBackend:
         random_ext.pack_tokens_kernel(
             flat_tokens,
             expert_weights,
-            topk_expert_idx,
+            topk_expert_idx.to(torch.int32),
             self.cfg.top_k,
             total_assignments,
             expert_offsets_cpy,

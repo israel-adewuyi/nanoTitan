@@ -3,19 +3,20 @@ run_name = "gpipe_pp_demo"
 [model]
 vocab_size = 50257
 d_model = 128
-max_seq_len = 512
-n_layers = 9
+max_seq_len = 128
+n_layers = 6
 d_head = 16
 n_heads = 8
 ffn_in = 512
 num_experts = 16
 top_k = 2
+moe_backend = "cuda"
 
 [trainer]
 seed = 42
 device_id = 3
 eval_every_step = -1
-per_device_batch_size = 16
+per_device_batch_size = 1
 
 [data]
 train_tokens_path = "data/preprocessed/tinystories_train.bin"
@@ -30,7 +31,7 @@ lr = "1e-3"
 name = "pp_gpipe"
 num_microbatches = 1
 dp_size = 2
-pp_size = 3
+pp_size = 2
 
 [profiler]
 enabled = false
