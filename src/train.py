@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+import torch
 
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
@@ -21,7 +22,7 @@ from src.runtime import (
     PipelineParallel,
     SingleDeviceRuntime,
 )
-from src.utils import load_run_config, seed_everything, setup_logging
+from src.utils import load_run_config, seed_everything, setup_logging, reduce_scalars
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ def main() -> None:
     world_size = get_world_size()
     assert world_size == cfg.runtime.dp_size * cfg.runtime.pp_size
     assert cfg.model.n_layers % cfg.runtime.pp_size == 0
-    # assert cfg.trainer.per_device_batch_size % cfg.trainer.microbatches == 0
+    assert cfg.trainer.per_device_batch_size % cfg.runtime.num_microbatches == 0
 
     # seed everything
     seed_everything(cfg.trainer.seed)
@@ -89,8 +90,8 @@ def main() -> None:
     # Setup the model
     model = NanoTitanModel.from_specs(cfg.model, spec)
     dp = DataParallel(cfg, dims)
-    pp = PipelineParallel(cfg, dims)
     dp.prepare_model(model)
+    pp = PipelineParallel(cfg, dims, dp.reducer)
     logger.debug(model)
 
     # Setup the data loader for train and test
@@ -101,27 +102,23 @@ def main() -> None:
     train_loader = dp.prepare_trainloader(train_dataset)
     val_loader = dp.prepare_valloader(val_dataset)
 
-    # return
-    # runtime.register_model_stats(raw_model)
-    # model = runtime.prepare_model(raw_model, dims)
+    total_params = torch.tensor([model.total_parameter_count()], device=dims.global_rank)
+    active_params = torch.tensor([model.active_parameter_count()], device=dims.global_rank)
+    
+    reduce_scalars(total_params, dims.pp_group)
+    reduce_scalars(active_params, dims.pp_group)
 
-    # if runtime.is_main_rank():
-    #     total_params = raw_model.total_parameter_count()
-    #     active_params = raw_model.active_parameter_count()
-    #     # Some detail logs about model and args
-    #     logger.info("Loaded model config from %s", normalize_config_arg(args.config))
-    #     logger.info("Model config: %s", cfg.model.model_dump())
-    #     logger.info(
-    #         "Number of parameters: %.2fM total, %.2fM active",
-    #         total_params / 1e6,
-    #         active_params / 1e6,
-    #     )
-    #     logger.info(f"Runtime is {cfg.runtime.name}")
+    if dims.global_rank == 0:
+        logger.info(
+            "Number of parameters: %.2fM total, %.2fM active",
+            total_params / 1e6,
+            active_params / 1e6,
+        )
 
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    iter = 1
+    iter = 10
     profiler = build_profiler(None, cfg.profiler)  # TODO: Fixx
 
     # step = 0
@@ -133,13 +130,25 @@ def main() -> None:
             step_start_time = time.perf_counter()
             for batch in train_loader:
                 optimizer.zero_grad()
-                print(
-                    f"At global rank {dims.global_rank}, dp rank = {dims.dp_rank}, pp rank = {dims.pp_rank} Calling step at iter {iter}"
-                )
-                pp.train_step(model, batch)
-                dp.finalize_backward()
+                # print(
+                #     f"At global rank {dims.global_rank}, dp rank = {dims.dp_rank}, pp rank = {dims.pp_rank} Calling step at iter {iter}"
+                # )
+                metrics = pp.train_step(model, batch)
+                # dp.finalize_backward()
                 optimizer.step()
+                logger.info(f"Rank is {dims.global_rank}, {metrics}")
                 #             step_metrics = runtime.train_step(model, (x, y), optimizer)
+                # if dims.global_rank == 3:
+                #     print(model)
+                #     for name, param in model.named_parameters():
+                #         if param.grad == None:
+                #             print(name)
+                #             print(param.shape)
+                            # break
+                        # if param.grad == None:
+                        #     print(param)
+                        # print(f"Param has grad = {param.grad == None}")
+                    # print(model)
 
                 iter -= 1
 

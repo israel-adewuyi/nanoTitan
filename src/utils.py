@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
+import torch.distributed as dist
 
 from src.config import AppConfig, load_config
 from src.metrics import MetricsLogger
@@ -44,3 +45,9 @@ def seed_everything(seed: int):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def reduce_scalars(scalar_tensor, pp_group):
+    dist.all_reduce(
+        scalar_tensor, op=dist.ReduceOp.SUM, group=pp_group, async_op=False
+    )

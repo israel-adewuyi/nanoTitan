@@ -73,6 +73,9 @@ class EmbeddingBlock(nn.Module):
     def forward(self, x: torch.Tensor):
         return self.token_embed(x) + self.position_embed(x)
 
+    def active_parameter_count(self):
+        return _parameter_count(self.token_embed)
+
 
 class Unembed(nn.Module):
     def __init__(self, cfg: ModelConfig):
@@ -82,6 +85,9 @@ class Unembed(nn.Module):
 
     def forward(self, x: torch.Tensor):
         return self.unembed(x)
+
+    def active_parameter_count(self):
+        return _parameter_count(self.unembed)
 
 
 class LayerNorm(nn.Module):
@@ -241,9 +247,10 @@ class NanoTitanModel(nn.Module):
         return _parameter_count(self)
 
     def active_parameter_count(self) -> int:
-        return _parameter_count(self.token_embed) + sum(
-            layer.active_parameter_count() for layer in self.layers
-        )
+        return sum(layer.active_parameter_count() for layer in self.blocks)
+        # return _parameter_count(self.token_embed) + sum(
+        #     layer.active_parameter_count() for layer in self.blocks
+        # )
 
     def forward(
         self, x: torch.Tensor, return_moe_stats: bool = False
