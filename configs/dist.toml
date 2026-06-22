@@ -1,0 +1,46 @@
+run_name = "gpipe_pp_demo"
+
+[model]
+vocab_size = 50257
+d_model = 128
+max_seq_len = 512
+n_layers = 9
+d_head = 16
+n_heads = 8
+ffn_in = 512
+num_experts = 16
+top_k = 2
+
+[trainer]
+seed = 42
+device_id = 3
+eval_every_step = -1
+per_device_batch_size = 16
+
+[data]
+train_tokens_path = "data/preprocessed/tinystories_train.bin"
+val_tokens_path = "data/preprocessed/tinystories_val.bin"
+num_workers = 4
+
+[optim]
+type = "adam"
+lr = "1e-3"
+
+[runtime]
+name = "pp_gpipe"
+num_microbatches = 1
+dp_size = 2
+pp_size = 3
+
+[profiler]
+enabled = false
+wait_steps = 50
+warmup_steps = 10
+active_steps = 5
+record_shapes = true
+profile_memory = true
+with_stack = false
+with_flops = false
+
+[hardware]
+peak_flops_tflops_per_gpu = 312.0
