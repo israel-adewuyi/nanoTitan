@@ -217,27 +217,20 @@ class TransformerLayer(nn.Module):
 
 
 class NanoTitanModel(nn.Module):
-    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec | None = None):
+    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
         super().__init__()
         self.cfg = cfg
         self.spec = spec
         self.blocks = nn.ModuleList()
 
-        if self.spec is None:
-            self.token_embed = TokenEmbed(self.cfg)
-            self.position_embed = PositionEmbed(self.cfg)
-            self.layers = nn.ModuleList(
-                TransformerLayer(self.cfg) for _ in range(self.cfg.n_layers)
-            )
-        else:
-            if self.spec.has_token_embed and self.spec.has_pos_embed:
-                self.blocks.append(EmbeddingBlock(cfg))
+        if self.spec.has_token_embed and self.spec.has_pos_embed:
+            self.blocks.append(EmbeddingBlock(cfg))
 
-            for _ in range(self.spec.layer_start, self.spec.layer_end):
-                self.blocks.append(TransformerLayer(cfg))
+        for _ in range(self.spec.layer_start, self.spec.layer_end):
+            self.blocks.append(TransformerLayer(cfg))
 
-            if self.spec.has_unembed_head:
-                self.blocks.append(Unembed(self.cfg))
+        if self.spec.has_unembed_head:
+            self.blocks.append(Unembed(self.cfg))
 
     @classmethod
     def from_specs(cls, cfg: ModelConfig, spec: ModelShardSpec):
@@ -248,9 +241,6 @@ class NanoTitanModel(nn.Module):
 
     def active_parameter_count(self) -> int:
         return sum(layer.active_parameter_count() for layer in self.blocks)
-        # return _parameter_count(self.token_embed) + sum(
-        #     layer.active_parameter_count() for layer in self.blocks
-        # )
 
     def forward(
         self, x: torch.Tensor, return_moe_stats: bool = False
@@ -268,13 +258,3 @@ class NanoTitanModel(nn.Module):
         # if return_moe_stats:
         #     return x, moe_stats
         return x
-
-    def get_incoming_acts_grad(self, microbatch_idx: int = 0):
-        return self.stage_inputs[microbatch_idx].grad
-
-    def get_outgoing_acts(self, microbatch_idx: int = 0):
-        return self.stage_outputs[microbatch_idx]
-
-    def clear_cached_acts(self) -> None:
-        self.stage_inputs = []
-        self.stage_outputs = []

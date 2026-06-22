@@ -72,7 +72,7 @@ class PipelineParallel:
                 if self.dim.is_pp_last_stage
                 else None
             )
-            self.backward(loss, model, microbatch_idx - 1)
+            self.backward(loss, model, microbatch_idx)
 
         self.reducer.prepare_missing_grad()
         self.finalize_backward()
