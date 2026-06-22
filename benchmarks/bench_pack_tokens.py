@@ -1,7 +1,6 @@
 import argparse
-
-import random_ext
 import torch
+import random_ext
 
 
 def make_inputs(tokens, hidden_dim, top_k, num_experts, device, dtype):
@@ -81,7 +80,7 @@ def run_pack(
         topk_experts,
         top_k,
         total_assignments,
-        expert_offsets_cpy,
+        expert_offsets,
         packed_X,
         packed_tokenId,
         packed_expert,
