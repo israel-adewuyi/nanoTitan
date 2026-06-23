@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -11,6 +12,8 @@ from pydantic import (
     PositiveInt,
     model_validator,
 )
+
+DTypeName = Literal["float16", "float32", "bfloat16"]
 
 
 class DataConfig(BaseModel):
@@ -94,7 +97,7 @@ class ModelConfig(BaseModel):
         default_factory=PositionalEmbeddingConfig
     )
     moe_backend: str = "torch"
-    dtype: str = "float32"
+    dtype: DTypeName = "float32"
 
     @model_validator(mode="after")
     def validate_embedding_compatibility(self) -> ModelConfig:
