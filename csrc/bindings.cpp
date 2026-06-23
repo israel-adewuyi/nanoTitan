@@ -26,6 +26,7 @@ void pack_tokens_kernel(
     torch::Tensor packed_weight,
     size_t hidden_dim
 );
+torch::Tensor naive_gemm_kernel(torch::Tensor A, torch::Tensor B);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("random_op", &random_op, "Random op");
@@ -34,4 +35,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("count_expert_kernel", &count_expert_kernel, "Kernel to count the number of experts for incoming resid stream");
     m.def("pack_tokens_kernel", &pack_tokens_kernel, "[num_tokens d_model] -> [num_tokens * topK d_model] packing");
     m.def("combine_tokens_kernel", &combine_tokens_kernel, "Kernel to weight-average token vectors from K experts into the residual stream");
+    m.def("naive_gemm_kernel", &naive_gemm_kernel, "Naive GEMM kernel";)
 }

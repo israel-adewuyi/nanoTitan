@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
@@ -12,6 +13,7 @@ setup(
             sources=[
                 "csrc/bindings.cpp",
                 "csrc/random.cpp",
+                "csrc/kernels/gemm.cu",
                 "csrc/kernels/copy_kernel.cu",
                 "csrc/kernels/pack_tokens.cu",
                 "csrc/kernels/count_experts.cu",
