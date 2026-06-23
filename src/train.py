@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import argparse
 import logging
-import time
+
 import torch
 
-from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import cleanup, get_world_size, init_distributed
 from src.model.model import NanoTitanModel
@@ -15,14 +14,9 @@ from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
 from src.runtime import (
     DataParallel,
-    DDPRuntime,
-    DDPRuntimeRef,
-    GPipePipelineParallel,
-    NaivePipelineParallel,
     PipelineParallel,
-    SingleDeviceRuntime,
 )
-from src.utils import load_run_config, seed_everything, setup_logging, reduce_scalars, resolve_dtype
+from src.utils import load_run_config, reduce_scalars, resolve_dtype, seed_everything, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +65,7 @@ def main() -> None:
     # allocate model layers to different ranks, including token, pos embed and umembed layer
     spec = get_model_shard_specs(dims, cfg)
     logger.debug(f"At rank {dims.global_rank}, spec is {spec}")
-    
+
     cfg.model.dtype = resolve_dtype(cfg.model.dtype)
 
     # Setup the model
@@ -85,13 +79,13 @@ def main() -> None:
     train_dataset = PackedTokenDataset(
         path=cfg.data.train_tokens_path, seq_len=cfg.model.max_seq_len
     )
-    val_dataset = PackedTokenDataset(path=cfg.data.val_tokens_path, seq_len=cfg.model.max_seq_len)
+    # val_dataset = PackedTokenDataset(path=cfg.data.val_tokens_path, seq_len=cfg.model.max_seq_len)
     train_loader = dp.prepare_trainloader(train_dataset)
-    val_loader = dp.prepare_valloader(val_dataset)
+    # val_loader = dp.prepare_valloader(val_dataset)
 
     total_params = torch.tensor([model.total_parameter_count()], device=dims.global_rank)
     active_params = torch.tensor([model.active_parameter_count()], device=dims.global_rank)
-    
+
     reduce_scalars(total_params, dims.pp_group)
     reduce_scalars(active_params, dims.pp_group)
 
@@ -102,9 +96,9 @@ def main() -> None:
             active_params / 1e6,
         )
         logger.info(f"Model parameters and activations will be in {cfg.model.dtype} datatype")
-        
+
         for name, p in model.named_parameters():
-            assert (p.dtype == cfg.model.dtype), f"{name} instead has dtype = {p.dtype}"
+            assert p.dtype == cfg.model.dtype, f"{name} instead has dtype = {p.dtype}"
 
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
@@ -118,7 +112,7 @@ def main() -> None:
             train_loader.sampler.set_epoch(0)
 
         with profiler as prof:
-            step_start_time = time.perf_counter()
+            # step_start_time = time.perf_counter()
             for batch in train_loader:
                 optimizer.zero_grad()
                 metrics = pp.train_step(model, batch)
@@ -132,11 +126,11 @@ def main() -> None:
                 #         if param.grad == None:
                 #             print(name)
                 #             print(param.shape)
-                            # break
-                        # if param.grad == None:
-                        #     print(param)
-                        # print(f"Param has grad = {param.grad == None}")
-                    # print(model)
+                # break
+                # if param.grad == None:
+                #     print(param)
+                # print(f"Param has grad = {param.grad == None}")
+                # print(model)
 
                 iter -= 1
 
@@ -152,7 +146,7 @@ def main() -> None:
 
                 #             runtime.log(step, metrics)
 
-                #             prof.step()
+                prof.step()
 
                 if iter == 0:
                     break
