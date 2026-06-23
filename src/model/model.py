@@ -20,9 +20,7 @@ class TokenEmbed(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.token_embed = nn.Embedding(
-            num_embeddings=cfg.vocab_size,
-            embedding_dim=cfg.d_model,
-            dtype=cfg.dtype
+            num_embeddings=cfg.vocab_size, embedding_dim=cfg.d_model, dtype=cfg.dtype
         )
 
     def forward(
