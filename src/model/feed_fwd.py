@@ -15,9 +15,9 @@ class FFN(nn.Module):
         self.cfg = cfg
 
         # SwiGLU uses two parallel input projections
-        self.W_gate = nn.Linear(cfg.d_model, cfg.ffn_in)
-        self.W_val = nn.Linear(cfg.d_model, cfg.ffn_in)
-        self.W_out = nn.Linear(cfg.ffn_in, cfg.d_model)
+        self.W_gate = nn.Linear(cfg.d_model, cfg.ffn_in, dtype=cfg.dtype)
+        self.W_val = nn.Linear(cfg.d_model, cfg.ffn_in, dtype=cfg.dtype)
+        self.W_out = nn.Linear(cfg.ffn_in, cfg.d_model, dtype=cfg.dtype)
         self.silu = nn.SiLU()
 
     def forward(
@@ -43,7 +43,7 @@ class MoE(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.experts = nn.ModuleList(FFN(cfg) for _ in range(self.cfg.num_experts))
-        self.router = nn.Linear(self.cfg.d_model, self.cfg.num_experts, bias=False)
+        self.router = nn.Linear(self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.dtype)
         if cfg.moe_backend == "cuda":
             self.moe_backend = CUDAMoEBackend(cfg, self.experts, self.router)
         else:

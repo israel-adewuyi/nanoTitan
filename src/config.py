@@ -94,6 +94,7 @@ class ModelConfig(BaseModel):
         default_factory=PositionalEmbeddingConfig
     )
     moe_backend: str = "torch"
+    dtype: str = "float32"
 
     @model_validator(mode="after")
     def validate_embedding_compatibility(self) -> ModelConfig:

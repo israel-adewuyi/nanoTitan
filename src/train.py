@@ -22,7 +22,7 @@ from src.runtime import (
     PipelineParallel,
     SingleDeviceRuntime,
 )
-from src.utils import load_run_config, seed_everything, setup_logging, reduce_scalars
+from src.utils import load_run_config, seed_everything, setup_logging, reduce_scalars, resolve_dtype
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,8 @@ def main() -> None:
     # allocate model layers to different ranks, including token, pos embed and umembed layer
     spec = get_model_shard_specs(dims, cfg)
     logger.debug(f"At rank {dims.global_rank}, spec is {spec}")
+    
+    cfg.model.dtype = resolve_dtype(cfg.model.dtype)
 
     # Setup the model
     model = NanoTitanModel.from_specs(cfg.model, spec)
@@ -99,11 +101,15 @@ def main() -> None:
             total_params / 1e6,
             active_params / 1e6,
         )
+        logger.info(f"Model parameters and activations will be in {cfg.model.dtype} datatype")
+        
+        for name, p in model.named_parameters():
+            assert (p.dtype == cfg.model.dtype), f"{name} instead has dtype = {p.dtype}"
 
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    iter = 1
+    iter = 2
     profiler = build_profiler(None, cfg.profiler)  # TODO: Fixx
 
     # step = 0

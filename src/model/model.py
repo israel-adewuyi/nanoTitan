@@ -22,6 +22,7 @@ class TokenEmbed(nn.Module):
         self.token_embed = nn.Embedding(
             num_embeddings=cfg.vocab_size,
             embedding_dim=cfg.d_model,
+            dtype=cfg.dtype
         )
 
     def forward(
@@ -49,7 +50,7 @@ class PositionEmbed(nn.Module):
     def _build_sinusoidal_pos_embed(cfg: ModelConfig) -> torch.Tensor:
         indices = torch.arange(cfg.max_seq_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, cfg.d_model, 2) * (-math.log(10000.0) / cfg.d_model))
-        pos_embed = torch.zeros(cfg.max_seq_len, cfg.d_model)
+        pos_embed = torch.zeros(cfg.max_seq_len, cfg.d_model, dtype=cfg.dtype)
         pos_embed[:, 0::2] = torch.sin(indices * div_term)
         pos_embed[:, 1::2] = torch.cos(indices * div_term)
         return pos_embed
@@ -81,7 +82,7 @@ class Unembed(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.cfg = cfg
-        self.unembed = nn.Linear(self.cfg.d_model, self.cfg.vocab_size, bias=False)
+        self.unembed = nn.Linear(self.cfg.d_model, self.cfg.vocab_size, bias=False, dtype=cfg.dtype)
 
     def forward(self, x: torch.Tensor):
         return self.unembed(x)
@@ -94,8 +95,8 @@ class LayerNorm(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.d_model = cfg.d_model
-        self.gamma = nn.Parameter(torch.ones(self.d_model))
-        self.beta = nn.Parameter(torch.zeros(self.d_model))
+        self.gamma = nn.Parameter(torch.ones(self.d_model, dtype=cfg.dtype))
+        self.beta = nn.Parameter(torch.zeros(self.d_model, dtype=cfg.dtype))
 
     def forward(
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
@@ -110,10 +111,10 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.cfg = cfg
-        self.W_Q = nn.Parameter(torch.Tensor(cfg.d_model, cfg.d_head * cfg.n_heads))
-        self.W_K = nn.Parameter(torch.Tensor(cfg.d_model, cfg.d_head * cfg.n_heads))
-        self.W_V = nn.Parameter(torch.Tensor(cfg.d_model, cfg.d_head * cfg.n_heads))
-        self.W_O = nn.Parameter(torch.Tensor(cfg.d_head * cfg.n_heads, cfg.d_model))
+        self.W_Q = nn.Parameter(torch.empty(cfg.d_model, cfg.d_head * cfg.n_heads, dtype=cfg.dtype))
+        self.W_K = nn.Parameter(torch.empty(cfg.d_model, cfg.d_head * cfg.n_heads, dtype=cfg.dtype))
+        self.W_V = nn.Parameter(torch.empty(cfg.d_model, cfg.d_head * cfg.n_heads, dtype=cfg.dtype))
+        self.W_O = nn.Parameter(torch.empty(cfg.d_head * cfg.n_heads, cfg.d_model, dtype=cfg.dtype))
 
         nn.init.xavier_uniform_(self.W_Q)
         nn.init.xavier_uniform_(self.W_K)

@@ -51,3 +51,9 @@ def reduce_scalars(scalar_tensor, pp_group):
     dist.all_reduce(
         scalar_tensor, op=dist.ReduceOp.SUM, group=pp_group, async_op=False
     )
+
+
+def resolve_dtype(dtype):
+        if dtype is None or isinstance(dtype, torch.dtype):
+            return dtype
+        return getattr(torch, dtype)
