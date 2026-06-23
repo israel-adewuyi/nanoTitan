@@ -66,4 +66,6 @@ torch::Tensor naive_gemm_kernel(
             );
         }
     );
+
+    return C;
 }
