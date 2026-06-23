@@ -1,7 +1,8 @@
 import einops
 import pytest
-import random_ext
 import torch
+
+import random_ext
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
