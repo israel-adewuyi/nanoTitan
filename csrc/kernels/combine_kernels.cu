@@ -48,10 +48,10 @@ torch::Tensor combine_tokens_kernel(
     dim3 threads(256);
     dim3 blocks(num_assignments);
 
-    combined_buffer = torch::zeros(
-        {num_tokens, hidden_dim},
+    torch::Tensor combined_buffer = torch::zeros(
+        {static_cast<long>(num_tokens), static_cast<long>(hidden_dim)},
         expert_outputs.options().dtype(torch::kFloat32)
-    )
+    );
 
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half,

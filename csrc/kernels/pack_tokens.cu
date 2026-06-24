@@ -69,7 +69,9 @@ void pack_tokens_kernel(
     size_t threads = 256;
     size_t blocks = total_assignments;
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+    AT_DISPATCH_FLOATING_TYPES_AND2(
+        at::ScalarType::Half,
+        at::ScalarType::BFloat16,
         X.scalar_type(),
         "pack_tokens_kernel",
         [&] {
