@@ -15,9 +15,9 @@ class FFN(nn.Module):
         self.cfg = cfg
 
         # SwiGLU uses two parallel input projections
-        self.W_gate = nn.Linear(cfg.d_model, cfg.ffn_in, dtype=cfg.dtype)
-        self.W_val = nn.Linear(cfg.d_model, cfg.ffn_in, dtype=cfg.dtype)
-        self.W_out = nn.Linear(cfg.ffn_in, cfg.d_model, dtype=cfg.dtype)
+        self.W_gate = nn.Linear(cfg.d_model, cfg.ffn_in, dtype=cfg.dtype, bias=False)
+        self.W_val = nn.Linear(cfg.d_model, cfg.ffn_in, dtype=cfg.dtype, bias=False)
+        self.W_out = nn.Linear(cfg.ffn_in, cfg.d_model, dtype=cfg.dtype, bias=False)
         self.silu = nn.SiLU()
 
     def forward(

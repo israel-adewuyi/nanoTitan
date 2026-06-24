@@ -27,9 +27,6 @@ class CUDAMoEBackend:
             topk_weights, topk_expert_idx = torch.topk(expert_probs, dim=-1, k=self.cfg.top_k)
         expert_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
 
-        # accumulate the weighted results of each expert per token
-        pool = torch.zeros_like(flat_tokens)
-
         total_assignments = num_tokens * self.cfg.top_k
 
         packed_X = torch.empty(
@@ -87,8 +84,8 @@ class CUDAMoEBackend:
                 continue
             packed_expert_outputs[start:end] = self.experts[expert](packed_X[start:end])
 
-        random_ext.combine_tokens_kernel(
-            packed_expert_outputs, packed_tokenId, packed_topk_weights, d_model, pool
-        )
+        pool = random_ext.combine_tokens_kernel(
+            packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, d_model
+        ).to(dtype=packed_expert_outputs.dtype)
 
         return (pool.reshape(batch, seq_len, d_model), expert_count)

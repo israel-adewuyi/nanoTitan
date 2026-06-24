@@ -2,11 +2,12 @@ import torch
 
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
+from src.utils import resolve_dtype
 from src.model.model import NanoTitanModel
 
 
-def make_test_config(d_model=8, num_experts=4, top_k=2):
-    return ModelConfig(
+def make_test_config(d_model=8, num_experts=4, top_k=2, moe_backend="torch"):
+    cfg = ModelConfig(
         d_model=d_model,
         num_experts=num_experts,
         top_k=top_k,
@@ -16,7 +17,10 @@ def make_test_config(d_model=8, num_experts=4, top_k=2):
         n_layers=1,
         max_seq_len=1,
         ffn_in=2 * d_model,
+        moe_backend=moe_backend,
     )
+    cfg.dtype = resolve_dtype(cfg.dtype)
+    return cfg
 
 
 def test_moe_output_shape():
@@ -25,6 +29,7 @@ def test_moe_output_shape():
             d_model=64,
             num_experts=16,
             top_k=4,
+            moe_backend="cuda",
         )
         device = "cuda"
         x = torch.randn(4, 16, 64, device=device)
