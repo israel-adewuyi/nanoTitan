@@ -8,8 +8,8 @@ __global__ void combine_tokens_kernel_cu(
     const T* __restrict__ expert_outputs,            //[assignments, d_model]
     const int32_t* __restrict__ packed_tokenId,       //[assignments]
     const float* __restrict__ packed_topk_weights,       //[assignments]
-    size_t d_model,
     float* combined_residual_stream,   //[num_tokens, d_model]
+    size_t d_model,
     int32_t num_assignments
 ){
     size_t assignment = blockIdx.x;
@@ -32,22 +32,26 @@ __global__ void combine_tokens_kernel_cu(
     }
 }
 
-void combine_tokens_kernel(
+torch::Tensor combine_tokens_kernel(
     torch::Tensor expert_outputs,            //[assignments, d_model]
     torch::Tensor packed_tokenId,       //[assignments]
     torch::Tensor packed_topk_weights,       //[assignments]
-    size_t d_model,
-    torch::Tensor combined_residual_stream   //[num_tokens, d_model]
+    size_t num_tokens,
+    size_t hidden_dim
 ){
     TORCH_CHECK(expert_outputs.is_contiguous(), "Expert output tensor should be contiguous");
     TORCH_CHECK(packed_tokenId.is_contiguous(), "packed token ids tensor should be contiguous");
     TORCH_CHECK(packed_topk_weights.is_contiguous(), "packed topk weights tensor should be contiguous");
-    TORCH_CHECK(combined_residual_stream.is_contiguous(), "Resid stream tensor should be contiguous");
 
     int32_t num_assignments = expert_outputs.size(0);
 
     dim3 threads(256);
     dim3 blocks(num_assignments);
+
+    combined_buffer = torch::zeros(
+        {num_tokens, hidden_dim},
+        expert_outputs.options().dtype(torch::kFloat32)
+    )
 
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half,
@@ -59,10 +63,12 @@ void combine_tokens_kernel(
                 expert_outputs.data_ptr<scalar_t>(),
                 packed_tokenId.data_ptr<int32_t>(),
                 packed_topk_weights.data_ptr<float>(),
-                d_model,
-                combined_residual_stream.data_ptr<float>(),
+                combined_buffer.data_ptr<float>(),
+                hidden_dim,
                 num_assignments
             );
         }
     );
+
+    return combined_buffer;
 }
