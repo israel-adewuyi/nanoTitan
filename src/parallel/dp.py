@@ -11,10 +11,11 @@ from src.runtime.reducer import ReducerV1
 
 class DataParallel:
     """
-        The DataParallel class handles all things related to data parallel, from registering hooks 
-        on params and dividing params in to buckets, to running AllReduce after .grad has been 
-        computed for all the params. 
+    The DataParallel class handles all things related to data parallel, from registering hooks
+    on params and dividing params in to buckets, to running AllReduce after .grad has been
+    computed for all the params.
     """
+
     def __init__(self, cfg: AppConfig, dims: ParallelDims):
         self.cfg = cfg
         self.dims = dims
@@ -22,14 +23,14 @@ class DataParallel:
 
     def prepare_model(self, model):
         """
-            This method 
-            1. syncs the parameters across the dp_group to ensure state_dict is equal at the starts
-            2. calls the reducer which registers hooks and divy parameters into buckets
+        This method
+        1. syncs the parameters across the dp_group to ensure state_dict is equal at the starts
+        2. calls the reducer which registers hooks and divy parameters into buckets
         """
         model = model.to(self.device)
 
         src = self.dims.dp_group_ranks[0]
-        
+
         with torch.no_grad():
             for params in model.parameters():
                 dist.broadcast(params, src=src, group=self.dims.dp_group, async_op=False)
@@ -47,11 +48,11 @@ class DataParallel:
             batch_size=self.cfg.trainer.per_device_batch_size,
             shuffle=False,
             sampler=DistributedSampler(
-                    dataset=train_dataset,
-                    shuffle=True,
-                    num_replicas=self.dims.dp_size,
-                    rank=self.dims.dp_rank
-                ),
+                dataset=train_dataset,
+                shuffle=True,
+                num_replicas=self.dims.dp_size,
+                rank=self.dims.dp_rank,
+            ),
             num_workers=self.cfg.data.num_workers,
             pin_memory=True,
             drop_last=True,

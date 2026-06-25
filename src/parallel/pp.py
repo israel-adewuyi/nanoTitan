@@ -5,9 +5,9 @@ import torch.distributed as dist
 import torch.nn.functional as F
 
 from src.config import AppConfig
-from src.runtime.base import ScalarMetric
 from src.model.model import NanoTitanModel
 from src.parallel_dims import ParallelDims
+from src.runtime.base import ScalarMetric
 from src.runtime.reducer import ReducerV1
 
 logger = logging.getLogger(__name__)
