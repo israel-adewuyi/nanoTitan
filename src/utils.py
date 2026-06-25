@@ -57,3 +57,8 @@ def resolve_dtype(dtype):
         if dtype is None or isinstance(dtype, torch.dtype):
             return dtype
         return getattr(torch, dtype)
+
+def get_profiler_trace_dir() -> Path | None:
+    if self.log_dir is None or not self.is_main_rank():
+        return None
+    return self.log_dir / "profiler"

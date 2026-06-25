@@ -31,7 +31,7 @@ def test_pack_tokens_correctness(dtype):
         dtype=torch.int32,
     )
 
-    topk_weights = torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.9, 0.1], [0.1, 0.9]], device="cuda", dtype=dtype)
+    topk_weights = torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.9, 0.1], [0.1, 0.9]], device="cuda", dtype=torch.float32)
 
     topK = 2
     total_assignments = X.shape[0] * topK
@@ -43,7 +43,7 @@ def test_pack_tokens_correctness(dtype):
     packed_X = torch.empty((total_assignments, hidden_dim), device="cuda", dtype=X.dtype)
     packed_expert = torch.empty((total_assignments), device="cuda", dtype=torch.int32)
     packed_tokenId = torch.empty((total_assignments), device="cuda", dtype=torch.int32)
-    packed_topk_weights = torch.empty((total_assignments), device="cuda", dtype=X.dtype)
+    packed_topk_weights = torch.empty((total_assignments), device="cuda", dtype=torch.float32)
 
     random_ext.pack_tokens_kernel(
         X,

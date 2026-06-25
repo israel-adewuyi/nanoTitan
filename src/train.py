@@ -60,7 +60,7 @@ def main() -> None:
 
     # divide ranks into their respective process groups, based on the parallelism config
     dims = get_parallel_dims(cfg.runtime)
-    logger.debug(f"At rank {dims.global_rank}, {dims}")
+    logger.debug(f"At rank {dims.global_rank}, {repr(dims)}")
 
     # allocate model layers to different ranks, including token, pos embed and umembed layer
     spec = get_model_shard_specs(dims, cfg)
@@ -105,7 +105,8 @@ def main() -> None:
     optimizer = setup_optimizer(cfg.optim, model)
 
     iter = 2
-    profiler = build_profiler(None, cfg.profiler)  # TODO: Fixx
+    profiler = build_profiler(cfg.run_name, cfg.profiler, dims)  # TODO: Fixx
+    logger.info("Attempting to begin training")
 
     # step = 0
     try:
