@@ -1,7 +1,8 @@
 import argparse
 
-import random_ext
 import torch
+
+import random_ext
 
 
 def bench_copy_scalar(

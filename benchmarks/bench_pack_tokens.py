@@ -1,5 +1,7 @@
 import argparse
+
 import torch
+
 import random_ext
 
 
@@ -252,9 +254,7 @@ def benchmark(args):
     # Read X once per assignment and write packed_X once per assignment.
     # Read topk_experts/topk_weights and write packed_tokenId/packed_expert/packed_topk_weights.
     bytes_x = total_assignments * args.hidden_dim * dtype_size * 2
-    bytes_metadata = total_assignments * (
-        4 + dtype_size + 4 + 4 + dtype_size
-    )
+    bytes_metadata = total_assignments * (4 + dtype_size + 4 + 4 + dtype_size)
     approx_bytes = bytes_x + bytes_metadata
 
     gbps = approx_bytes / (avg_ms / 1000.0) / 1e9

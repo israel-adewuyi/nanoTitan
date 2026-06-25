@@ -1,9 +1,10 @@
-import torch
 import pytest
+import torch
 
 import random_ext
 
 # Will extend to include pack and combine when combine is fully implemented.
+
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_pack_tokens_correctness(dtype):
@@ -17,7 +18,7 @@ def test_pack_tokens_correctness(dtype):
             [0.8, 0.8],
         ],
         device="cuda",
-        dtype=dtype
+        dtype=dtype,
     )  # TODO: The fn should read the cuda device I want to use.
 
     topk_experts = torch.tensor(
@@ -31,7 +32,11 @@ def test_pack_tokens_correctness(dtype):
         dtype=torch.int32,
     )
 
-    topk_weights = torch.tensor([[0.7, 0.3], [0.6, 0.4], [0.9, 0.1], [0.1, 0.9]], device="cuda", dtype=torch.float32)
+    topk_weights = torch.tensor(
+        [[0.7, 0.3], [0.6, 0.4], [0.9, 0.1], [0.1, 0.9]],
+        device="cuda",
+        dtype=torch.float32,
+    )
 
     topK = 2
     total_assignments = X.shape[0] * topK

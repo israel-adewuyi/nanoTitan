@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -30,4 +29,3 @@ ReduceOp = Literal["mean", "max", "sum", "none"]
 class ScalarMetric:
     value: float
     reduce: ReduceOp = "mean"
-

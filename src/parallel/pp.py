@@ -7,8 +7,8 @@ import torch.nn.functional as F
 from src.config import AppConfig
 from src.metrics import ScalarMetric
 from src.model.model import NanoTitanModel
-from src.parallel_dims import ParallelDims
 from src.parallel.reducer import ReducerV1
+from src.parallel_dims import ParallelDims
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class PipelineParallel:
         microbatch_x, microbatch_y = self.prepare_microbatch(x, y)
         self.microbatch_size = x.shape[0] // self.cfg.runtime.num_microbatches
         # self._reset_peak_memory_stats()
-        losses, backward_time = [], None
+        losses = []
 
         for mb_x, mb_y in zip(microbatch_x, microbatch_y, strict=False):
             if self.dim.is_pp_first_stage:
@@ -54,7 +54,7 @@ class PipelineParallel:
             logger.debug(f"[RANK {self.dim.local_rank}] Beginning forward pass")
             mb_x = model(mb_x)
             logger.debug(f"[RANK {self.dim.local_rank}] Ending forward pass")
-            
+
             if self.dim.local_rank in [1, 3]:
                 logger.debug(f"[RANK {self.dim.local_rank}] Got to this junction")
 

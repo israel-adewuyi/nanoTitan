@@ -5,8 +5,8 @@ from torch.utils.data.distributed import DistributedSampler
 
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
-from src.parallel_dims import ParallelDims
 from src.parallel.reducer import ReducerV1
+from src.parallel_dims import ParallelDims
 
 
 class DataParallel:

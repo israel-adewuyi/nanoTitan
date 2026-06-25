@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import torch
 
-from pathlib import Path
 from src.config import ProfilerConfig
+
 # from src.runtime.base import Runtime
 
 logger = logging.getLogger(__name__)
