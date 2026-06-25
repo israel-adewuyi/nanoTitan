@@ -4,8 +4,9 @@ import logging
 
 import torch
 
+from pathlib import Path
 from src.config import ProfilerConfig
-from src.runtime.base import Runtime
+# from src.runtime.base import Runtime
 
 logger = logging.getLogger(__name__)
 
@@ -21,25 +22,27 @@ class NoOpProfiler:
         pass
 
 
-def _resolve_runtime_device(runtime: Runtime) -> torch.device:
-    device = runtime.device
-    if isinstance(device, torch.device):
-        return device
-    return torch.device(device)
+# def _resolve_runtime_device(runtime: Runtime) -> torch.device:
+#     device = runtime.device
+#     if isinstance(device, torch.device):
+#         return device
+#     return torch.device(device)
 
 
-def _get_activities(runtime: Runtime) -> list[torch.profiler.ProfilerActivity]:
+def _get_activities() -> list[torch.profiler.ProfilerActivity]:
     activities = [torch.profiler.ProfilerActivity.CPU]
-    if _resolve_runtime_device(runtime).type == "cuda":
-        activities.append(torch.profiler.ProfilerActivity.CUDA)
+    activities.append(torch.profiler.ProfilerActivity.CUDA)
     return activities
 
 
-def build_profiler(runtime: Runtime, cfg: ProfilerConfig):
+def build_profiler(run_name: str, cfg: ProfilerConfig, dims):
     if not cfg.enabled:
         return NoOpProfiler()
 
-    trace_dir = runtime.get_profiler_trace_dir()
+    if not dims.global_rank == 0:
+        return NoOpProfiler()
+
+    trace_dir = Path("runs") / f"{run_name}" / "profiler"
     if trace_dir is None:
         return NoOpProfiler()
 
@@ -47,7 +50,7 @@ def build_profiler(runtime: Runtime, cfg: ProfilerConfig):
     logger.info("Torch profiler enabled. Traces will be written to %s", trace_dir)
 
     return torch.profiler.profile(
-        activities=_get_activities(runtime),
+        activities=_get_activities(),
         schedule=torch.profiler.schedule(
             wait=cfg.wait_steps,
             warmup=cfg.warmup_steps,

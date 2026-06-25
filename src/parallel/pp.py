@@ -5,10 +5,10 @@ import torch.distributed as dist
 import torch.nn.functional as F
 
 from src.config import AppConfig
+from src.metrics import ScalarMetric
 from src.model.model import NanoTitanModel
 from src.parallel_dims import ParallelDims
-from src.runtime.base import ScalarMetric
-from src.runtime.reducer import ReducerV1
+from src.parallel.reducer import ReducerV1
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +45,21 @@ class PipelineParallel:
                     f"At rank {self.dim.local_rank}!!! Receiving activations from rank {self.dim.prev_pp_rank}"
                 )
                 dist.recv(mb_x, src=self.dim.prev_pp_rank, group=self.dim.pp_group)
+                logger.debug(
+                    f"At rank {self.dim.local_rank}!!! Activations received from rank {self.dim.prev_pp_rank}"
+                )
                 mb_x.requires_grad_()
                 self.stage_inputs.append(mb_x)
 
+            logger.debug(f"[RANK {self.dim.local_rank}] Beginning forward pass")
             mb_x = model(mb_x)
+            logger.debug(f"[RANK {self.dim.local_rank}] Ending forward pass")
+            
+            if self.dim.local_rank in [1, 3]:
+                logger.debug(f"[RANK {self.dim.local_rank}] Got to this junction")
 
             if self.dim.is_pp_last_stage:
+                logger.debug(f"[RANK {self.dim.local_rank}] We are last stage, beginning bwd pass")
                 # compute loss here
                 mb_y = mb_y.to(self.device)
                 loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
@@ -65,6 +74,7 @@ class PipelineParallel:
                 losses.append(None)
 
         # Backward pass
+        logger.debug(f"[RANK {self.dim.local_rank}] Beginning bwd pass")
         for microbatch_idx in reversed(range(self.cfg.runtime.num_microbatches)):
             self.reducer.backward_grad_sync = microbatch_idx == 0
             loss = (
@@ -73,9 +83,11 @@ class PipelineParallel:
                 else None
             )
             self.backward(loss, model, microbatch_idx)
-
+        logger.debug(f"[RANK {self.dim.local_rank}] Ended bwd pass")
         self.reducer.prepare_missing_grad()
+        logger.debug(f"[RANK {self.dim.local_rank}] Prepared missing grad")
         self.finalize_backward()
+        logger.debug(f"[RANK {self.dim.local_rank}] Finalized backward pass")
 
         metrics = {
             "train/loss": ScalarMetric(

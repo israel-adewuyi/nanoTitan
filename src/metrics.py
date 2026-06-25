@@ -1,5 +1,8 @@
 import json
 from pathlib import Path
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -18,3 +21,13 @@ class MetricsLogger:
 
     def close(self) -> None:
         self.writer.close()
+
+
+ReduceOp = Literal["mean", "max", "sum", "none"]
+
+
+@dataclass(frozen=True)
+class ScalarMetric:
+    value: float
+    reduce: ReduceOp = "mean"
+
