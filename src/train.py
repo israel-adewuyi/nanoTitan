@@ -10,12 +10,12 @@ from src.dist_env import cleanup, get_world_size, init_distributed
 from src.model.model import NanoTitanModel
 from src.model_utils import get_model_shard_specs
 from src.optim import setup_optimizer
-from src.parallel_dims import get_parallel_dims
-from src.profiler import build_profiler
-from src.runtime import (
+from src.parallel import (
     DataParallel,
     PipelineParallel,
 )
+from src.parallel_dims import get_parallel_dims
+from src.profiler import build_profiler
 from src.utils import load_run_config, reduce_scalars, resolve_dtype, seed_everything, setup_logging
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,7 @@ def main() -> None:
     logger.debug(f"At rank {dims.global_rank}, spec is {spec}")
 
     cfg.model.dtype = resolve_dtype(cfg.model.dtype)
+    cfg.model.moe_router_dtype = resolve_dtype(cfg.model.moe_router_dtype)
 
     # Setup the model
     model = NanoTitanModel.from_specs(cfg.model, spec)
@@ -97,8 +98,8 @@ def main() -> None:
         )
         logger.info(f"Model parameters and activations will be in {cfg.model.dtype} datatype")
 
-        for name, p in model.named_parameters():
-            assert p.dtype == cfg.model.dtype, f"{name} instead has dtype = {p.dtype}"
+        # for name, p in model.named_parameters():
+        #     assert p.dtype == cfg.model.dtype, f"{name} instead has dtype = {p.dtype}"
 
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)

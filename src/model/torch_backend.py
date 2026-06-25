@@ -20,13 +20,16 @@ class TorchMoEBackend:
         flat_tokens = x.reshape(-1, d_model)
 
         # get the expert logits
+        router_dtype = self.router.weight.dtype
         with record_function("moe/router"):
-            expert_logits = self.router(flat_tokens)
+            expert_logits = self.router(flat_tokens.to(router_dtype))
 
         with record_function("moe/topK"):
             expert_probs = expert_logits.softmax(dim=-1)
             topk_weights, topk_expert_idx = torch.topk(expert_probs, dim=-1, k=self.cfg.top_k)
         expert_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
+
+        assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
         # accumulate the weighted results of each expert per token
         pool = torch.zeros_like(flat_tokens)

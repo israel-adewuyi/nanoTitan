@@ -98,6 +98,7 @@ class ModelConfig(BaseModel):
     )
     moe_backend: str = "torch"
     dtype: DTypeName = "float32"
+    moe_router_dtype: DTypeName = "float32"
 
     @model_validator(mode="after")
     def validate_embedding_compatibility(self) -> ModelConfig:

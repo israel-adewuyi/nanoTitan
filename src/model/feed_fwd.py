@@ -43,7 +43,9 @@ class MoE(nn.Module):
         super().__init__()
         self.cfg = cfg
         self.experts = nn.ModuleList(FFN(cfg) for _ in range(self.cfg.num_experts))
-        self.router = nn.Linear(self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.dtype)
+        self.router = nn.Linear(
+            self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.moe_router_dtype
+        )
         if cfg.moe_backend == "cuda":
             self.moe_backend = CUDAMoEBackend(cfg, self.experts, self.router)
         else:

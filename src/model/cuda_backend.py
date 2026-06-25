@@ -1,8 +1,8 @@
 import torch
-import random_ext
 import torch.nn as nn
 from torch.profiler import record_function
 
+import random_ext
 from src.config import ModelConfig
 
 
@@ -19,13 +19,22 @@ class CUDAMoEBackend:
         flat_tokens = x.reshape(-1, d_model)
 
         # get the expert logits
+        router_dtype = self.router.weight.dtype
         with record_function("moe/router"):
-            expert_logits = self.router(flat_tokens)
+            expert_logits = self.router(
+                flat_tokens.to(router_dtype)
+            )  # cast to fp32 (or whatever dtype router is)
 
         with record_function("moe/topK"):
-            expert_probs = expert_logits.softmax(dim=-1)
+            expert_probs = expert_logits.softmax(
+                dim=-1
+            )  # also in fp32 (or whatever dtype router is)
             topk_weights, topk_expert_idx = torch.topk(expert_probs, dim=-1, k=self.cfg.top_k)
-        expert_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
+        expert_weights = topk_weights / topk_weights.sum(
+            dim=-1, keepdim=True
+        )  # also in fp32 (or whatever dtype router is)
+
+        assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
         total_assignments = num_tokens * self.cfg.top_k
 
@@ -48,7 +57,7 @@ class CUDAMoEBackend:
         packed_topk_weights = torch.empty(
             total_assignments,
             device=x.device,
-            dtype=x.dtype,
+            dtype=torch.float32,
         )
 
         mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)

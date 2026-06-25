@@ -6,16 +6,16 @@
 
 template <typename T>
 __global__ void pack_tokens_kernel_cu(
-    T* X,                                // [num_tokens, d_model]
-    T* topk_weights,                     // [num_tokens, top_K]
-    int32_t* topk_experts,                // [num_tokens, top_K]
+    const T* __restrict__ X,                                // [num_tokens, d_model]
+    const float* __restrict__ topk_weights,                     // [num_tokens, top_K]
+    const int32_t* __restrict__ topk_experts,                // [num_tokens, top_K]
     size_t topK,
     size_t total_assignments,
     int32_t* expert_offset_cpy,
     T* packed_X,
     int32_t* packed_tokenId,
     int32_t* packed_expert,
-    T* packed_topk_weights,
+    float* packed_topk_weights,
     size_t hidden_dim
 ){
     // Map logical threads to num_tokens * topK
@@ -65,8 +65,6 @@ void pack_tokens_kernel(
     TORCH_CHECK(packed_X.is_contiguous(), "Packed X tensor must be contiguous");
 
     TORCH_CHECK(X.scalar_type() == packed_X.scalar_type(),  "X and packed X should have the same dtype");
-    TORCH_CHECK(X.scalar_type() == topk_weights.scalar_type(), "X should have the same dtype as topK weights");
-    TORCH_CHECK(X.scalar_type() == packed_topk_weights.scalar_type(), "X should have the same dtype as packed weights");
 
     size_t threads = 256;
     size_t blocks = total_assignments;
@@ -82,7 +80,7 @@ void pack_tokens_kernel(
         [&] {
             pack_tokens_kernel_cu<scalar_t><<<blocks, threads, 0, stream>>>(
                 X.data_ptr<scalar_t>(),
-                topk_weights.data_ptr<scalar_t>(),
+                topk_weights.data_ptr<float>(),
                 topk_experts.data_ptr<int32_t>(), 
                 topK, 
                 total_assignments, 
@@ -90,7 +88,7 @@ void pack_tokens_kernel(
                 packed_X.data_ptr<scalar_t>(),
                 packed_tokenId.data_ptr<int32_t>(), 
                 packed_expert.data_ptr<int32_t>(), 
-                packed_topk_weights.data_ptr<scalar_t>(), 
+                packed_topk_weights.data_ptr<float>(), 
                 hidden_dim
             );
         }
