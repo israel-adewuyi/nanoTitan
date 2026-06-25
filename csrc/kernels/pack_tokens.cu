@@ -1,5 +1,7 @@
-#include <cuda_runtime.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/extension.h>
+#include <cuda_runtime.h>
 
 
 template <typename T>
@@ -69,13 +71,16 @@ void pack_tokens_kernel(
     size_t threads = 256;
     size_t blocks = total_assignments;
 
+    c10::cuda::CUDAGuard guard(X.device());
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
     AT_DISPATCH_FLOATING_TYPES_AND2(
         at::ScalarType::Half,
         at::ScalarType::BFloat16,
         X.scalar_type(),
         "pack_tokens_kernel",
         [&] {
-            pack_tokens_kernel_cu<scalar_t><<<blocks, threads>>>(
+            pack_tokens_kernel_cu<scalar_t><<<blocks, threads, 0, stream>>>(
                 X.data_ptr<scalar_t>(),
                 topk_weights.data_ptr<scalar_t>(),
                 topk_experts.data_ptr<int32_t>(), 

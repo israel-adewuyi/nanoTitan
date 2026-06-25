@@ -1,3 +1,5 @@
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/extension.h>
 #include <cuda_runtime.h>
 #include "cuda_check.h"
@@ -32,6 +34,9 @@ torch::Tensor count_expert_kernel(torch::Tensor topk_experts_per_token, torch::T
     int threads = 256;
     int blocks = (N + threads - 1) / threads;
 
+    c10::cuda::CUDAGuard guard(topk_experts_per_token.device());
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
     auto expert_count = torch::empty(
         {static_cast<int64_t>(num_experts)},
         torch::TensorOptions()
@@ -41,7 +46,7 @@ torch::Tensor count_expert_kernel(torch::Tensor topk_experts_per_token, torch::T
 
     cudaMemset(expert_count.data_ptr<int>(), 0, num_experts * sizeof(int));
 
-    count_experts<<<blocks, threads>>>(
+    count_experts<<<blocks, threads, 0, stream>>>(
         topk_experts_per_token.data_ptr<int>(),
         mask.data_ptr<int>(),
         expert_count.data_ptr<int>(),

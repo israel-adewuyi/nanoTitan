@@ -1,6 +1,7 @@
 #include <ATen/cuda/CUDAContext.h>
-#include <cuda_runtime.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/extension.h>
+#include <cuda_runtime.h>
 
 
 template <typename T>
@@ -48,6 +49,9 @@ torch::Tensor combine_tokens_kernel(
     dim3 threads(256);
     dim3 blocks(num_assignments);
 
+    c10::cuda::CUDAGuard guard(expert_outputs.device());
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
     torch::Tensor combined_buffer = torch::zeros(
         {static_cast<long>(num_tokens), static_cast<long>(hidden_dim)},
         expert_outputs.options().dtype(torch::kFloat32)
@@ -59,7 +63,7 @@ torch::Tensor combine_tokens_kernel(
         expert_outputs.scalar_type(),
         "combine_tokens_kernel",
         [&] {
-            combine_tokens_kernel_cu<scalar_t><<<blocks, threads>>>(
+            combine_tokens_kernel_cu<scalar_t><<<blocks, threads, 0, stream>>>(
                 expert_outputs.data_ptr<scalar_t>(),
                 packed_tokenId.data_ptr<int32_t>(),
                 packed_topk_weights.data_ptr<float>(),
