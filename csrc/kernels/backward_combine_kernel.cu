@@ -40,13 +40,11 @@ __global__ void backward_combine_kernel_cu(
     atomicAdd(&packed_topk_weights_grad[assignment], weight_grad);
 }
 
-void backward_combine_kernel(
+std::tuple<torch::Tensor, torch::Tensor> backward_combine_kernel(
     torch::Tensor expert_outputs,
     torch::Tensor packed_tokenIds,
     torch::Tensor packed_topk_weights,
     torch::Tensor residual_stream_grad,
-    torch::Tensor expert_output_grad,
-    torch::Tensor packed_topk_weights_grad,
     size_t hidden_dim,
     size_t num_assignments
 ){
@@ -54,11 +52,19 @@ void backward_combine_kernel(
     TORCH_CHECK(packed_tokenIds.is_contiguous(), "Tensor should be laid out in contiguous memory location");
     TORCH_CHECK(packed_topk_weights.is_contiguous(), "Tensor should be laid out in contiguous memory location");
     TORCH_CHECK(residual_stream_grad.is_contiguous(), "Tensor should be laid out in contiguous memory location");
-    TORCH_CHECK(expert_outputs.sizes() == expert_output_grad.sizes(), "Shapes should be aligned");
-    TORCH_CHECK(packed_topk_weights_grad.sizes() == packed_topk_weights.sizes(), "Shapes should be aligned");
 
     c10::cuda::CUDAGuard guard(expert_outputs.device());
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    packed_topk_weights_grad = torch::zeros(
+        packed_topk_weights.sizes(),
+        packed_topk_weights.options().dtype(torch::kFloat32)
+    );
+
+    expert_output_grad = torch.zeros(
+        expert_outputs.sizes(),
+        expert_outputs.options()
+    );
 
     dim3 threads(128);
     dim3 blocks(num_assignments);
@@ -70,15 +76,17 @@ void backward_combine_kernel(
         "combine_backward_kernel",
         [&] {
             backward_combine_kernel_cu<scalar_t><<<blocks, threads, 0, stream>>>(
-                expert_outputs.data_ptr<scalar_t>, 
-                packed_tokenIds.data_ptr<int32_t>,
-                packed_topk_weights.data_ptr<float>,
-                residual_stream_grad.data_ptr<scalar_t>,
-                packed_topk_weights_grad.data_ptr<float>,
-                expert_output_grad.data_ptr<scalar_t>,
+                expert_outputs.data_ptr<scalar_t>(), 
+                packed_tokenIds.data_ptr<int32_t>(),
+                packed_topk_weights.data_ptr<float>(),
+                residual_stream_grad.data_ptr<scalar_t>(),
+                packed_topk_weights_grad.data_ptr<float>(),
+                expert_output_grad.data_ptr<scalar_t>(),
                 num_assignments,
                 hidden_dim
             );
         }
     );
+
+    return {expert_output_grad, packed_topk_weights_grad};
 }
