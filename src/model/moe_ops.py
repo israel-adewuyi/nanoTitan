@@ -14,7 +14,6 @@ class CombineTokensFN(torch.autograd.Function):
 
         ctx.save_for_backward(packed_expert_outputs, packed_tokenId, packed_topk_weights)
         ctx.hidden_dim = hidden_dim
-        ctx.num_tokens = num_tokens
 
         return pool
 
@@ -28,7 +27,6 @@ class CombineTokensFN(torch.autograd.Function):
             packed_topk_weights,
             d_resid_stream.contiguous(),
             ctx.hidden_dim,
-            ctx.num_tokens,
         )
 
         return expert_output_grad, None, packed_topk_weights_grad, None, None

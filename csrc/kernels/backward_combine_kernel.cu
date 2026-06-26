@@ -15,7 +15,6 @@ __global__ void combine_kernel_backward_cu(
     size_t num_assignments,
     size_t hidden_dim
 ){
-    // Assuming the MoEs do topk = 1
     size_t assignment = blockIdx.x;
     size_t thread_idx = threadIdx.x;
 
@@ -45,8 +44,7 @@ std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
     torch::Tensor packed_tokenIds,
     torch::Tensor packed_topk_weights,
     torch::Tensor residual_stream_grad,
-    size_t hidden_dim,
-    size_t num_assignments
+    size_t hidden_dim
 ){
     TORCH_CHECK(expert_outputs.is_contiguous(), "Tensor should be laid out in contiguous memory location");
     TORCH_CHECK(packed_tokenIds.is_contiguous(), "Tensor should be laid out in contiguous memory location");
@@ -65,6 +63,8 @@ std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
         expert_outputs.sizes(),
         expert_outputs.options()
     );
+
+    size_t num_assignments = expert_outputs.size(0);
 
     dim3 threads(128);
     dim3 blocks(num_assignments);

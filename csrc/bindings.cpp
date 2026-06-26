@@ -32,8 +32,7 @@ std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
     torch::Tensor packed_tokenIds,
     torch::Tensor packed_topk_weights,
     torch::Tensor residual_stream_grad,
-    size_t hidden_dim,
-    size_t num_assignments
+    size_t hidden_dim
 );
 
 torch::Tensor naive_gemm_kernel(torch::Tensor A, torch::Tensor B);
