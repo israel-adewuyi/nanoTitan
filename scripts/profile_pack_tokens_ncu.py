@@ -39,13 +39,7 @@ def parse_args() -> argparse.Namespace:
 
 def make_stem(args: argparse.Namespace) -> str:
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    return (
-        f"pack_tokens_{stamp}"
-        f"_tok{args.tokens}"
-        f"_hd{args.hidden_dim}"
-        f"_topk{args.top_k}"
-        f"_{args.dtype}"
-    )
+    return f"pack_tokens_{stamp}_tok{args.tokens}_hd{args.hidden_dim}_topk{args.top_k}_{args.dtype}"
 
 
 def build_command(

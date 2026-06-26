@@ -27,10 +27,10 @@ class ReducerV0:
 
 class ReducerV1:
     """
-        Bucketed DDP
-        
-        This Reducer class registers the reduce_grad hook for each parameter and allocates the 
-        parameters into buckets.
+    Bucketed DDP
+
+    This Reducer class registers the reduce_grad hook for each parameter and allocates the
+    parameters into buckets.
     """
 
     def __init__(
@@ -103,14 +103,13 @@ class ReducerV1:
         bucket["ready_count"] = 0
         self.buckets.append(bucket)
 
-
     def prepare_missing_grad(self):
         """
-            For MoEs, unused experts to not fire reduce_grad(). bucket['work'] then throws an error
-            becaus no work handle has been assigned. 
-            
-            This method fixes that by going through all the params under the purview of this Reducer,
-            zero-ing them and calling reduce_grad. 
+        For MoEs, unused experts to not fire reduce_grad(). bucket['work'] then throws an error
+        becaus no work handle has been assigned.
+
+        This method fixes that by going through all the params under the purview of this Reducer,
+        zero-ing them and calling reduce_grad.
         """
         for p in self.params:
             if p not in self.ready_for_sync:
@@ -119,14 +118,13 @@ class ReducerV1:
                     p.grad = torch.zeros_like(p)
                 self.reduce_grad(p)
 
-
     def reduce_grad(self, param) -> None:
         """
-            For microbatches with pipeline parallel, gradients should be synced at the last 
-            microbatch bwd pass.
-            
-            Once .grad is ready, copy it over to it's position in the buffer and once buffer is 
-            filled up, launch AllReduce and store the work handle
+        For microbatches with pipeline parallel, gradients should be synced at the last
+        microbatch bwd pass.
+
+        Once .grad is ready, copy it over to it's position in the buffer and once buffer is
+        filled up, launch AllReduce and store the work handle
         """
         if self.backward_grad_sync is False:
             return
@@ -148,8 +146,8 @@ class ReducerV1:
 
     def finalize_backward(self):
         """
-            Wait for the AllReduce to be done, divide by the group size and copy the param.grad 
-            back to their respective tensors in preparation for the optimizer step
+        Wait for the AllReduce to be done, divide by the group size and copy the param.grad
+        back to their respective tensors in preparation for the optimizer step
         """
         for _, bucket in enumerate(self.buckets):
             bucket["work"].wait()

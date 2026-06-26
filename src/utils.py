@@ -48,15 +48,14 @@ def seed_everything(seed: int):
 
 
 def reduce_scalars(scalar_tensor, pp_group):
-    dist.all_reduce(
-        scalar_tensor, op=dist.ReduceOp.SUM, group=pp_group, async_op=False
-    )
+    dist.all_reduce(scalar_tensor, op=dist.ReduceOp.SUM, group=pp_group, async_op=False)
 
 
 def resolve_dtype(dtype):
-        if dtype is None or isinstance(dtype, torch.dtype):
-            return dtype
-        return getattr(torch, dtype)
+    if dtype is None or isinstance(dtype, torch.dtype):
+        return dtype
+    return getattr(torch, dtype)
+
 
 def get_profiler_trace_dir() -> Path | None:
     if self.log_dir is None or not self.is_main_rank():
