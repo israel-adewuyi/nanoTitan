@@ -31,12 +31,12 @@ class CombineTokensFN(torch.autograd.Function):
             ctx.num_tokens,
         )
 
-        return expert_output_grad, None, packed_topk_weights_grad, None
+        return expert_output_grad, None, packed_topk_weights_grad, None, None
 
 
 def combine_tokens(
     packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, hidden_dim
 ):
-    return CombineTokensFn.apply(
+    return CombineTokensFN.apply(
         packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, hidden_dim
     )

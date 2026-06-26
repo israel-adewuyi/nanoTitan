@@ -26,6 +26,16 @@ void pack_tokens_kernel(
     torch::Tensor packed_weight,
     size_t hidden_dim
 );
+
+std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
+    torch::Tensor expert_outputs,
+    torch::Tensor packed_tokenIds,
+    torch::Tensor packed_topk_weights,
+    torch::Tensor residual_stream_grad,
+    size_t hidden_dim,
+    size_t num_assignments
+);
+
 torch::Tensor naive_gemm_kernel(torch::Tensor A, torch::Tensor B);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -34,6 +44,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("copy_vector", &copy_vector, "Copy vector");
     m.def("count_expert_kernel", &count_expert_kernel, "Kernel to count the number of experts for incoming resid stream");
     m.def("pack_tokens_kernel", &pack_tokens_kernel, "[num_tokens d_model] -> [num_tokens * topK d_model] packing");
+
     m.def("combine_tokens_kernel", &combine_tokens_kernel, "Kernel to weight-average token vectors from K experts into the residual stream");
+    m.def("combine_kernel_backward", &combine_kernel_backward, "Kernel to run bwd pass for the expert outputs combination");
+
     m.def("naive_gemm_kernel", &naive_gemm_kernel, "Naive GEMM kernel");
 }

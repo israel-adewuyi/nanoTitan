@@ -5,7 +5,7 @@
 
 
 template <typename T>
-__global__ void backward_combine_kernel_cu(
+__global__ void combine_kernel_backward_cu(
     const T* __restrict__ expert_outputs,
     const int32_t* __restrict__ packed_tokenIds,
     const float* __restrict__ packed_topk_weights,
@@ -40,7 +40,7 @@ __global__ void backward_combine_kernel_cu(
     atomicAdd(&packed_topk_weights_grad[assignment], weight_grad);
 }
 
-std::tuple<torch::Tensor, torch::Tensor> backward_combine_kernel(
+std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
     torch::Tensor expert_outputs,
     torch::Tensor packed_tokenIds,
     torch::Tensor packed_topk_weights,
@@ -56,12 +56,12 @@ std::tuple<torch::Tensor, torch::Tensor> backward_combine_kernel(
     c10::cuda::CUDAGuard guard(expert_outputs.device());
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-    packed_topk_weights_grad = torch::zeros(
+    torch::Tensor packed_topk_weights_grad = torch::zeros(
         packed_topk_weights.sizes(),
         packed_topk_weights.options().dtype(torch::kFloat32)
     );
 
-    expert_output_grad = torch.zeros(
+    torch::Tensor expert_output_grad = torch::zeros(
         expert_outputs.sizes(),
         expert_outputs.options()
     );
@@ -75,7 +75,7 @@ std::tuple<torch::Tensor, torch::Tensor> backward_combine_kernel(
         expert_outputs.scalar_type(),
         "combine_backward_kernel",
         [&] {
-            backward_combine_kernel_cu<scalar_t><<<blocks, threads, 0, stream>>>(
+            combine_kernel_backward_cu<scalar_t><<<blocks, threads, 0, stream>>>(
                 expert_outputs.data_ptr<scalar_t>(), 
                 packed_tokenIds.data_ptr<int32_t>(),
                 packed_topk_weights.data_ptr<float>(),
