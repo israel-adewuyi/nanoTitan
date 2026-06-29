@@ -27,8 +27,6 @@ def make_inputs(tokens, hidden_dim, top_k, num_experts, device, dtype):
     expert_offsets[0] = 0
     expert_offsets[1:] = torch.cumsum(counts, dim=0)
 
-    total_assignments = tokens * top_k
-
     return (
         X,
         topk_weights,
@@ -139,9 +137,9 @@ def benchmark(args):
         )
 
     torch.cuda.synchronize()
-    check_offsets = expert_offsets.clone()
+
     if args.check:
-        # check_offsets = expert_offsets.clone()
+        check_offsets = expert_offsets.clone()
         packed_X, packed_tokenId, packed_expert, packed_topk_weights = run_pack(
             X,
             topk_weights,
@@ -174,7 +172,7 @@ def benchmark(args):
             X,
             topk_weights,
             topk_experts,
-            check_offsets,
+            timed_offsets,
         )
 
     end.record()

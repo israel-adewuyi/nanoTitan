@@ -8,8 +8,6 @@ import random_ext
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_pack_tokens_correctness(dtype):
-    hidden_dim = 2
-
     X = torch.tensor(
         [
             [0.1, 0.2],

@@ -1,5 +1,4 @@
 import torch
-import pytest
 
 from src.model.moe_ops import pack_tokens
 
@@ -11,12 +10,6 @@ def test_pack_backward_matches_reference():
     num_tokens = 3
     assignments = 6
     d_model = 8
-
-    packed_token_ids = torch.tensor(
-        [0, 0, 1, 1, 2, 2],
-        device=device,
-        dtype=torch.int32,
-    )
 
     x_ref = torch.randn(num_tokens, d_model, device=device, requires_grad=True)
     x_cuda = x_ref.detach().clone().requires_grad_(True)
@@ -34,7 +27,7 @@ def test_pack_backward_matches_reference():
         dtype=torch.int32,
     )
 
-    packed_cuda, packed_tokenId, packed_expert, packed_topk_weights = pack_tokens(
+    packed_cuda, packed_tokenId, _, _ = pack_tokens(
         x_cuda, topk_weights, topk_experts, expert_offset
     )
 
