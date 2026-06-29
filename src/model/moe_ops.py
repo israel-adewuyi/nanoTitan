@@ -35,8 +35,9 @@ class PackTokensFN(torch.autograd.Function):
         return packed_X, packed_tokenId, packed_expert, packed_topk_weights
 
     @staticmethod
-    def backward(ctx, packed_X_grad, packed_topk_weights_grad) -> Any:
-        # return super().backward(ctx, packed_X_grad, packed_topk_weights_grad)
+    def backward(
+        ctx, packed_X_grad, packed_tokenId_grad, packed_expert_grad, packed_topk_weights_grad
+    ) -> Any:
         packed_tokenId, packed_expert, topk_experts = ctx.saved_tensors
 
         X_grad, topk_weights_grad = random_ext.pack_kernel_backward(

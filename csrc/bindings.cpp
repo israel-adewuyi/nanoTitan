@@ -13,7 +13,7 @@ torch::Tensor combine_tokens_kernel(
     size_t num_tokens,    
     size_t d_model   
 );
-void pack_tokens_kernel(
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor> pack_tokens_kernel(
     torch::Tensor X,
     torch::Tensor topk_weights,
     torch::Tensor topk_experts,
