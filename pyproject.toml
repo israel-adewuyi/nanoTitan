@@ -3,16 +3,16 @@ name = "nanotitan"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "einops>=0.8.2",
     "jaxtyping>=0.3.9",
-    "numpy>=2.4.3",
+    "numpy==1.26.4",
     "pydantic>=2.11.0",
     "pytest>=9.0.3",
     "tensorboard>=2.20.0",
     "tiktoken>=0.12.0",
-    "torch>=2.6.0,<2.7.0",
+    "torch==2.6.0",
 ]
 
 [dependency-groups]
@@ -21,16 +21,17 @@ dev = [
     "ruff>=0.12.0",
 ]
 
-[tool.uv]
-index-url = "https://pypi.org/simple"
-extra-index-url = ["https://download.pytorch.org/whl/cu124"]
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
 
-# [tool.uv.sources]
-# torch = { index = "https://download.pytorch.org/whl/cu124" }
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = [
