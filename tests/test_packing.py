@@ -9,6 +9,7 @@ import random_ext
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_pack_tokens_correctness(dtype):
     hidden_dim = 2
+    print("Started this")
 
     X = torch.tensor(
         [
@@ -45,23 +46,16 @@ def test_pack_tokens_correctness(dtype):
         ([0, 4, 6, 8]), device="cuda", dtype=torch.int32
     )  # TODO: I should call count_expert kernel and do the prefix sum for this. Leave for now.
 
-    packed_X = torch.empty((total_assignments, hidden_dim), device="cuda", dtype=X.dtype)
-    packed_expert = torch.empty((total_assignments), device="cuda", dtype=torch.int32)
-    packed_tokenId = torch.empty((total_assignments), device="cuda", dtype=torch.int32)
-    packed_topk_weights = torch.empty((total_assignments), device="cuda", dtype=torch.float32)
+    # packed_X = torch.empty((total_assignments, hidden_dim), device="cuda", dtype=X.dtype)
+    # packed_expert = torch.empty((total_assignments), device="cuda", dtype=torch.int32)
+    # packed_tokenId = torch.empty((total_assignments), device="cuda", dtype=torch.int32)
+    # packed_topk_weights = torch.empty((total_assignments), device="cuda", dtype=torch.float32)
 
-    random_ext.pack_tokens_kernel(
+    packed_X, packed_expert, packed_tokenId, packed_topk_weights = random_ext.pack_tokens_kernel(
         X,
         topk_weights,
         topk_experts,
-        topK,
-        total_assignments,
         expert_offset_cpy,
-        packed_X,
-        packed_tokenId,
-        packed_expert,
-        packed_topk_weights,
-        hidden_dim,
     )
 
     torch.cuda.synchronize()

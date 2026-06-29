@@ -17,14 +17,7 @@ void pack_tokens_kernel(
     torch::Tensor X,
     torch::Tensor topk_weights,
     torch::Tensor topk_experts,
-    size_t topK,
-    size_t total_assignments,
-    torch::Tensor expert_offset_cpy,
-    torch::Tensor packed_X,
-    torch::Tensor packed_tokenId,
-    torch::Tensor packed_expert,
-    torch::Tensor packed_weight,
-    size_t hidden_dim
+    torch::Tensor expert_offset_cpy
 );
 
 std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
