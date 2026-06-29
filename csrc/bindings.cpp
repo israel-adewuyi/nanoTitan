@@ -36,6 +36,14 @@ std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
     size_t num_assignments
 );
 
+std::tuple<torch::Tensor, torch::Tensor> pack_kernel_backward(
+    torch::Tensor packed_X_grad,
+    torch::Tensor packed_topk_weights_grad,
+    torch::Tensor packed_tokenId,
+    torch::Tensor packed_expert,
+    torch::Tensor topk_experts
+);
+
 torch::Tensor naive_gemm_kernel(torch::Tensor A, torch::Tensor B);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -49,4 +57,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("combine_kernel_backward", &combine_kernel_backward, "Kernel to run bwd pass for the expert outputs combination");
 
     m.def("naive_gemm_kernel", &naive_gemm_kernel, "Naive GEMM kernel");
+
+    m.def("pack_kernel_backward", &pack_kernel_backward, "Kernel to run bwd pass on the pack ops");
 }

@@ -36,29 +36,7 @@ class CUDAMoEBackend:
 
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
-        total_assignments = num_tokens * self.cfg.top_k
-
-        packed_X = torch.empty(
-            total_assignments,
-            d_model,
-            device=x.device,
-            dtype=x.dtype,
-        )
-        packed_expert = torch.empty(
-            total_assignments,
-            device=x.device,
-            dtype=torch.int32,
-        )
-        packed_tokenId = torch.empty(
-            total_assignments,
-            device=x.device,
-            dtype=torch.int32,
-        )
-        packed_topk_weights = torch.empty(
-            total_assignments,
-            device=x.device,
-            dtype=torch.float32,
-        )
+        # total_assignments = num_tokens * self.cfg.top_k
 
         mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)
         expert_count = random_ext.count_expert_kernel(
@@ -70,18 +48,11 @@ class CUDAMoEBackend:
         expert_offsets[1:] = torch.cumsum(expert_count, dim=0)
         expert_offsets_cpy = expert_offsets.clone()
 
-        random_ext.pack_tokens_kernel(
+        packed_X, packed_tokenId, _, packed_topk_weights = random_ext.pack_tokens_kernel(
             flat_tokens,
             expert_weights,
             topk_expert_idx.to(torch.int32),
-            self.cfg.top_k,
-            total_assignments,
             expert_offsets_cpy,
-            packed_X,
-            packed_tokenId,
-            packed_expert,
-            packed_topk_weights,
-            d_model,
         )
 
         # Temporary Python expert compute. Replace this with grouped GEMM later.

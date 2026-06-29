@@ -18,7 +18,8 @@ setup(
                 "csrc/kernels/pack_tokens.cu",
                 "csrc/kernels/count_experts.cu",
                 "csrc/kernels/combine_kernels.cu",
-                "csrc/kernels/backward_combine_kernel.cu"
+                "csrc/kernels/backward_combine_kernel.cu",
+                "csrc/kernels/backward_pack_kernel.cu",
             ],
             include_dirs=[
                 str(ROOT / "csrc"),

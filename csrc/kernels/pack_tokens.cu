@@ -48,23 +48,36 @@ __global__ void pack_tokens_kernel_cu(
 }
 
 
-void pack_tokens_kernel(
+std::tuple<torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor> pack_tokens_kernel(
     torch::Tensor X,                   //[num_tokens, d_model]
     torch::Tensor topk_weights,        //[num_tokens, topK]
     torch::Tensor topk_experts,        //[num_tokens, topK]
-    size_t topK,
-    size_t total_assignments,          //[batch_size * seq_len * topK]
     torch::Tensor expert_offset_cpy,   //[num_experts]
-    torch::Tensor packed_X,            //[num_tokens * topK, d_model]
-    torch::Tensor packed_tokenId,      //[num_tokens * topK]
-    torch::Tensor packed_expert,       //[num_tokens * topK]
-    torch::Tensor packed_topk_weights, //[num_tokens * topK]
-    size_t hidden_dim
 ){
     TORCH_CHECK(X.is_contiguous(), "X must be contiguous");
-    TORCH_CHECK(packed_X.is_contiguous(), "Packed X tensor must be contiguous");
+    TORCH_CHECK(topk_weights.is_contiguous(), "Weights for the topK should be off");
 
-    TORCH_CHECK(X.scalar_type() == packed_X.scalar_type(),  "X and packed X should have the same dtype");
+    size_t num_tokens = X.sizes(0);
+    size_t topK = topk_weights.sizes(1);
+    size_t hidden_dim = X.sizes(1);
+    size_t total_assignments = num_tokens * topK;   
+
+    torch.Tensor packed_X = torch::empty(
+        {total_assignments, hidden_dim},
+        X.options()
+    );
+    torch.Tensor packed_expert = torch::empty(
+        {total_assignments},
+        X.options().dtype(torch::Int32)
+    );
+    torch.Tensor packed_tokenId = torch.empty(
+        {total_assignments},
+        X.options().dtype(torch::Int32)
+    );
+    torch.Tensor packed_topk_weights = torch.empty(
+        {total_assignments},
+        X.options().dtype(torch::kFloat32)
+    );
 
     size_t threads = 256;
     size_t blocks = total_assignments;
@@ -94,6 +107,6 @@ void pack_tokens_kernel(
         }
     );
 
-    
+    return {packed_X, packed_tokenId, packed_expert, packed_topk_weights};
 }
     
