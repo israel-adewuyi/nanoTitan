@@ -8,7 +8,7 @@ def test_combine_backward_matches_reference():
     device = "cuda"
 
     num_tokens = 3
-    assignments = 3
+    assignments = 6
     d_model = 8
 
     expert_out_ref = torch.randn(
@@ -24,7 +24,7 @@ def test_combine_backward_matches_reference():
     )
 
     packed_token_ids = torch.tensor(
-        [0, 1, 2],
+        [0, 0, 1, 1, 2, 2],
         device=device,
         dtype=torch.int32,
     )
