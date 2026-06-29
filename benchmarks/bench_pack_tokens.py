@@ -17,7 +17,7 @@ def make_inputs(tokens, hidden_dim, top_k, num_experts, device, dtype):
         dtype=torch.int32,
     )
 
-    topk_weights = torch.rand(tokens, top_k, device=device, dtype=dtype)
+    topk_weights = torch.rand(tokens, top_k, device=device, dtype=torch.float32)
 
     # Count expert assignments.
     flat_experts = topk_experts.reshape(-1)
@@ -29,37 +29,11 @@ def make_inputs(tokens, hidden_dim, top_k, num_experts, device, dtype):
 
     total_assignments = tokens * top_k
 
-    packed_X = torch.empty(
-        total_assignments,
-        hidden_dim,
-        device=device,
-        dtype=dtype,
-    )
-    packed_expert = torch.empty(
-        total_assignments,
-        device=device,
-        dtype=torch.int32,
-    )
-    packed_tokenId = torch.empty(
-        total_assignments,
-        device=device,
-        dtype=torch.int32,
-    )
-    packed_topk_weights = torch.empty(
-        total_assignments,
-        device=device,
-        dtype=dtype,
-    )
-
     return (
         X,
         topk_weights,
         topk_experts,
         expert_offsets,
-        packed_X,
-        packed_tokenId,
-        packed_expert,
-        packed_topk_weights,
     )
 
 
@@ -67,27 +41,13 @@ def run_pack(
     X,
     topk_weights,
     topk_experts,
-    top_k,
-    total_assignments,
     expert_offsets,
-    packed_X,
-    packed_tokenId,
-    packed_expert,
-    packed_topk_weights,
-    hidden_dim,
 ):
-    random_ext.pack_tokens_kernel(
+    return random_ext.pack_tokens_kernel(
         X,
         topk_weights,
         topk_experts,
-        top_k,
-        total_assignments,
         expert_offsets,
-        packed_X,
-        packed_tokenId,
-        packed_expert,
-        packed_topk_weights,
-        hidden_dim,
     )
 
 
@@ -157,10 +117,6 @@ def benchmark(args):
         topk_weights,
         topk_experts,
         expert_offsets,
-        packed_X,
-        packed_tokenId,
-        packed_expert,
-        packed_topk_weights,
     ) = make_inputs(
         tokens=args.tokens,
         hidden_dim=args.hidden_dim,
@@ -179,32 +135,18 @@ def benchmark(args):
             X,
             topk_weights,
             topk_experts,
-            args.top_k,
-            total_assignments,
             warmup_offsets,
-            packed_X,
-            packed_tokenId,
-            packed_expert,
-            packed_topk_weights,
-            args.hidden_dim,
         )
 
     torch.cuda.synchronize()
-
+    check_offsets = expert_offsets.clone()
     if args.check:
-        check_offsets = expert_offsets.clone()
-        run_pack(
+        # check_offsets = expert_offsets.clone()
+        packed_X, packed_tokenId, packed_expert, packed_topk_weights = run_pack(
             X,
             topk_weights,
             topk_experts,
-            args.top_k,
-            total_assignments,
             check_offsets,
-            packed_X,
-            packed_tokenId,
-            packed_expert,
-            packed_topk_weights,
-            args.hidden_dim,
         )
         torch.cuda.synchronize()
         correctness_check(
@@ -228,18 +170,11 @@ def benchmark(args):
     start.record()
 
     for timed_offsets in timed_expert_offsets:
-        run_pack(
+        packed_X, packed_tokenId, packed_expert, packed_topk_weights = run_pack(
             X,
             topk_weights,
             topk_experts,
-            args.top_k,
-            total_assignments,
-            timed_offsets,
-            packed_X,
-            packed_tokenId,
-            packed_expert,
-            packed_topk_weights,
-            args.hidden_dim,
+            check_offsets,
         )
 
     end.record()
