@@ -8,7 +8,7 @@ import torch.distributed as dist
 
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import cleanup, get_world_size, init_distributed
-from src.metrics import ScalarMetric
+from src.metrics import MetricsLogger, ScalarMetric
 from src.model.model import NanoTitanModel
 from src.model_utils import get_model_shard_specs
 from src.optim import setup_optimizer
@@ -106,6 +106,8 @@ def main() -> None:
     pp = PipelineParallel(cfg, dims, dp.reducer)
     logger.debug(model)
 
+    metrics_logger = MetricsLogger(cfg.run_name)
+
     # Setup the data loader for train and test
     train_dataset = PackedTokenDataset(
         path=cfg.data.train_tokens_path, seq_len=cfg.model.max_seq_len
@@ -136,7 +138,6 @@ def main() -> None:
     metric_device = torch.device(f"cuda:{dims.local_rank}" if torch.cuda.is_available() else "cpu")
     logger.info("Attempting to begin training")
 
-    # step = 0
     try:
         if hasattr(train_loader.sampler, "set_epoch"):
             train_loader.sampler.set_epoch(0)
@@ -159,9 +160,11 @@ def main() -> None:
                 )
                 logger.info(f"Rank is {dims.global_rank}, {metrics}")
 
-                iter -= 1
+                # Log metrics to tensorboard on rank 0
+                if dims.local_rank == 0:
+                    metrics_logger.log(step=2 - iter, metrics=metrics)
 
-                #             runtime.log(step, metrics)
+                iter -= 1
 
                 prof.step()
 

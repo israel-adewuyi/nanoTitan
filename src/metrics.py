@@ -7,7 +7,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class MetricsLogger:
-    def __init__(self, log_dir: str):
+    def __init__(self, run_name: str):
+        log_dir = f"runs/{run_name}"
         self.log_dir = Path(log_dir)
         self.writer = SummaryWriter(log_dir=str(self.log_dir))
 
