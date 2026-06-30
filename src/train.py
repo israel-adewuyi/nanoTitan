@@ -4,9 +4,11 @@ import argparse
 import logging
 
 import torch
+import torch.distributed as dist
 
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import cleanup, get_world_size, init_distributed
+from src.metrics import ScalarMetric
 from src.model.model import NanoTitanModel
 from src.model_utils import get_model_shard_specs
 from src.optim import setup_optimizer
@@ -16,9 +18,37 @@ from src.parallel import (
 )
 from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
-from src.utils import load_run_config, reduce_scalars, resolve_dtype, seed_everything, setup_logging
+from src.utils import (
+    load_run_config,
+    reduce_scalars,
+    resolve_dtype,
+    seed_everything,
+    setup_logging,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def reduce_metrics(metrics: dict[str, ScalarMetric], device: torch.device) -> dict[str, float]:
+    reduced = {}
+    world_size = dist.get_world_size()
+
+    for name, metric in metrics.items():
+        value = torch.as_tensor(metric.value, dtype=torch.float64, device=device)
+
+        if metric.reduce == "sum":
+            dist.all_reduce(value, op=dist.ReduceOp.SUM)
+        elif metric.reduce == "mean":
+            dist.all_reduce(value, op=dist.ReduceOp.SUM)
+            value /= world_size
+        elif metric.reduce == "max":
+            dist.all_reduce(value, op=dist.ReduceOp.MAX)
+        elif metric.reduce != "none":
+            raise ValueError(f"Unknown metric reduction: {metric.reduce}")
+
+        reduced[name] = value.item()
+
+    return reduced
 
 
 def parse_args() -> argparse.Namespace:
@@ -98,14 +128,12 @@ def main() -> None:
         )
         logger.info(f"Model parameters and activations will be in {cfg.model.dtype} datatype")
 
-        # for name, p in model.named_parameters():
-        #     assert p.dtype == cfg.model.dtype, f"{name} instead has dtype = {p.dtype}"
-
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
     iter = 2
     profiler = build_profiler(cfg.run_name, cfg.profiler, dims)  # TODO: Fixx
+    metric_device = torch.device(f"cuda:{dims.local_rank}" if torch.cuda.is_available() else "cpu")
     logger.info("Attempting to begin training")
 
     # step = 0
@@ -116,35 +144,22 @@ def main() -> None:
         with profiler as prof:
             # step_start_time = time.perf_counter()
             for batch in train_loader:
-                optimizer.zero_grad()
-                metrics = pp.train_step(model, batch)
-                # dp.finalize_backward()
-                optimizer.step()
+                metrics = pp.train_step(model, batch, optimizer)
+                num_tokens = (
+                    cfg.trainer.per_device_batch_size * cfg.runtime.dp_size * cfg.model.max_seq_len
+                )
+                metrics.update(
+                    {
+                        "train/tokens_per_step": ScalarMetric(num_tokens, reduce="none"),
+                    }
+                )
+                metrics = reduce_metrics(metrics, metric_device)
+                metrics["train/tokens_per_second"] = (
+                    metrics["train/tokens_per_step"] / metrics["time/step_time"]
+                )
                 logger.info(f"Rank is {dims.global_rank}, {metrics}")
-                #             step_metrics = runtime.train_step(model, (x, y), optimizer)
-                # if dims.global_rank == 3:
-                #     print(model)
-                #     for name, param in model.named_parameters():
-                #         if param.grad == None:
-                #             print(name)
-                #             print(param.shape)
-                # break
-                # if param.grad == None:
-                #     print(param)
-                # print(f"Param has grad = {param.grad == None}")
-                # print(model)
 
                 iter -= 1
-
-                #             train_step_time = time.perf_counter() - step_start_time
-                #             tokens = (step + 1) * runtime.tokens_per_step
-
-                #             metrics = {
-                #                 "stats/tokens": ScalarMetric(tokens, reduce="none"),
-                #                 "stats/train_step_time": ScalarMetric(train_step_time, reduce="max"),
-                #             }
-
-                #             metrics.update(step_metrics)
 
                 #             runtime.log(step, metrics)
 

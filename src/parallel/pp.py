@@ -1,4 +1,5 @@
 import logging
+import time
 
 import torch
 import torch.distributed as dist
@@ -22,11 +23,20 @@ class PipelineParallel:
         self.stage_inputs = []
         self.stage_outputs = []
 
-    def train_step(self, model: NanoTitanModel, batch):
+    def synchronize_device(self):
+        if torch.cuda.is_available():
+            torch.cuda.synchronize(self.device)
+
+    def train_step(self, model: NanoTitanModel, batch, optimizer):
         x, y = batch
         microbatch_x, microbatch_y = self.prepare_microbatch(x, y)
         self.microbatch_size = x.shape[0] // self.cfg.runtime.num_microbatches
+
+        self.synchronize_device()
+        step_start_time = time.perf_counter()
         # self._reset_peak_memory_stats()
+
+        optimizer.zero_grad()
         losses = []
 
         for mb_x, mb_y in zip(microbatch_x, microbatch_y, strict=False):
@@ -51,27 +61,21 @@ class PipelineParallel:
                 mb_x.requires_grad_()
                 self.stage_inputs.append(mb_x)
 
-            logger.debug(f"[RANK {self.dim.local_rank}] Beginning forward pass")
             mb_x = model(mb_x)
-            logger.debug(f"[RANK {self.dim.local_rank}] Ending forward pass")
-
-            if self.dim.local_rank in [1, 3]:
-                logger.debug(f"[RANK {self.dim.local_rank}] Got to this junction")
 
             if self.dim.is_pp_last_stage:
-                logger.debug(f"[RANK {self.dim.local_rank}] We are last stage, beginning bwd pass")
                 # compute loss here
                 mb_y = mb_y.to(self.device)
                 loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
                 losses.append(loss)
             else:
-                logger.debug(
-                    f"Sending activations from rank {self.dim.local_rank} to rank {self.dim.next_pp_rank}"
-                )
                 self.stage_outputs.append(mb_x)
 
                 dist.send(mb_x, dst=self.dim.next_pp_rank, group=self.dim.pp_group)
                 losses.append(None)
+
+        self.synchronize_device()
+        forward_time = time.perf_counter() - step_start_time
 
         # Backward pass
         logger.debug(f"[RANK {self.dim.local_rank}] Beginning bwd pass")
@@ -83,17 +87,21 @@ class PipelineParallel:
                 else None
             )
             self.backward(loss, model, microbatch_idx)
-        logger.debug(f"[RANK {self.dim.local_rank}] Ended bwd pass")
+
         self.reducer.prepare_missing_grad()
-        logger.debug(f"[RANK {self.dim.local_rank}] Prepared missing grad")
         self.finalize_backward()
-        logger.debug(f"[RANK {self.dim.local_rank}] Finalized backward pass")
+
+        optimizer.step()
+        self.synchronize_device()
+        step_time = time.perf_counter() - step_start_time
 
         metrics = {
             "train/loss": ScalarMetric(
                 sum(losses).item() if self.dim.is_pp_last_stage else 0.0,
                 reduce="sum",
             ),
+            "time/step_time": ScalarMetric(step_time, reduce="max"),
+            "time/forward_time": ScalarMetric(forward_time, reduce="max"),
         }
 
         return metrics
