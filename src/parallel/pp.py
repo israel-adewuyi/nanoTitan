@@ -97,7 +97,9 @@ class PipelineParallel:
 
         metrics = {
             "train/loss": ScalarMetric(
-                sum(losses).item() if self.dim.is_pp_last_stage else 0.0,
+                (sum(losses) / self.cfg.runtime.num_microbatches).item()
+                if self.dim.is_pp_last_stage
+                else 0.0,
                 reduce="sum",
             ),
             "time/step_time": ScalarMetric(step_time, reduce="max"),

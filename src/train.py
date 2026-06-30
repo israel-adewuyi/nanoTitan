@@ -145,7 +145,6 @@ def main() -> None:
             train_loader.sampler.set_epoch(0)
 
         with profiler as prof:
-            # step_start_time = time.perf_counter()
             for batch in train_loader:
                 metrics = pp.train_step(model, batch, optimizer)
                 num_tokens = (
@@ -154,13 +153,16 @@ def main() -> None:
                 metrics.update(
                     {
                         "train/tokens_per_step": ScalarMetric(num_tokens, reduce="none"),
-                        "train/total_tokens_seen": ScalarMetric(num_tokens * (iter + 1), reduce="none"),
+                        "train/total_tokens_seen": ScalarMetric(
+                            num_tokens * (iter + 1), reduce="none"
+                        ),
                     }
                 )
                 metrics = reduce_metrics(metrics, metric_device)
                 metrics["train/tokens_per_second"] = (
                     metrics["train/tokens_per_step"] / metrics["time/step_time"]
                 )
+                metrics["train/loss"] = metrics["train/loss"] / dims.dp_size
 
                 # Log metrics to tensorboard on rank 0
                 if dims.local_rank == 0:
