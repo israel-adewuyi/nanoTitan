@@ -121,6 +121,7 @@ class TrainerConfig(BaseModel):
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     run_name: str
+    max_steps: PositiveInt
     model: ModelConfig
     trainer: TrainerConfig
     data: DataConfig

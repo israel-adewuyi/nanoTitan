@@ -106,7 +106,9 @@ def main() -> None:
     pp = PipelineParallel(cfg, dims, dp.reducer)
     logger.debug(model)
 
-    metrics_logger = MetricsLogger(cfg.run_name)
+    metrics_logger = None
+    if dims.local_rank == 0:
+        metrics_logger = MetricsLogger(cfg.run_name)
 
     # Setup the data loader for train and test
     train_dataset = PackedTokenDataset(
@@ -133,7 +135,7 @@ def main() -> None:
     # Setup the optimizer
     optimizer = setup_optimizer(cfg.optim, model)
 
-    iter = 2
+    iter = 0
     profiler = build_profiler(cfg.run_name, cfg.profiler, dims)  # TODO: Fixx
     metric_device = torch.device(f"cuda:{dims.local_rank}" if torch.cuda.is_available() else "cpu")
     logger.info("Attempting to begin training")
@@ -158,17 +160,17 @@ def main() -> None:
                 metrics["train/tokens_per_second"] = (
                     metrics["train/tokens_per_step"] / metrics["time/step_time"]
                 )
-                logger.info(f"Rank is {dims.global_rank}, {metrics}")
 
                 # Log metrics to tensorboard on rank 0
                 if dims.local_rank == 0:
-                    metrics_logger.log(step=2 - iter, metrics=metrics)
+                    logger.info(f"Rank is {dims.global_rank}, {metrics}")
+                    metrics_logger.log(step=iter, metrics=metrics)
 
-                iter -= 1
+                iter += 1
 
                 prof.step()
 
-                if iter == 0:
+                if iter == cfg.max_steps:
                     break
 
     #             if cfg.trainer.eval_every_step != -1 and (
