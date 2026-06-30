@@ -154,6 +154,7 @@ def main() -> None:
                 metrics.update(
                     {
                         "train/tokens_per_step": ScalarMetric(num_tokens, reduce="none"),
+                        "train/total_tokens_seen": ScalarMetric(num_tokens * (iter + 1), reduce="none"),
                     }
                 )
                 metrics = reduce_metrics(metrics, metric_device)

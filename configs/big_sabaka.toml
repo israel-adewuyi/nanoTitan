@@ -1,0 +1,49 @@
+run_name = "testing_2000_steps"
+max_steps = 2000
+
+[model]
+vocab_size = 50257
+d_model = 512
+max_seq_len = 2048
+n_layers = 14
+d_head = 64
+n_heads = 8
+ffn_in = 2048
+num_experts = 16
+top_k = 2
+moe_backend = "cuda"
+
+[trainer]
+seed = 42
+device_id = 3
+eval_every_step = -1
+per_device_batch_size = 16
+
+[data]
+train_tokens_path = "data/preprocessed/tinystories_train.bin"
+val_tokens_path = "data/preprocessed/tinystories_val.bin"
+num_workers = 4
+
+[optim]
+type = "adam"
+lr = "1e-3"
+
+[runtime]
+name = "pp_gpipe"
+num_microbatches = 1
+bucket_size = 150
+dp_size = 2
+pp_size = 1
+
+[profiler]
+enabled = false
+wait_steps = 50
+warmup_steps = 10
+active_steps = 5
+record_shapes = true
+profile_memory = true
+with_stack = false
+with_flops = false
+
+[hardware]
+peak_flops_tflops_per_gpu = 312.0
