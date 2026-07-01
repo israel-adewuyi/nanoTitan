@@ -51,6 +51,7 @@ class PipelineParallel:
                             self.cfg.model.d_model,
                         ),
                         device=self.device,
+                        dtype=self.cfg.model.dtype,
                     )
                     logger.debug(
                         f"At rank {self.dim.local_rank}!!! Receiving activations from rank {self.dim.prev_pp_rank}"
@@ -122,6 +123,7 @@ class PipelineParallel:
                     self.cfg.model.max_seq_len,
                     self.cfg.model.d_model,
                 ),
+                dtype=self.cfg.model.dtype,
                 device=self.device,
             )
             dist.recv(out_acts_grad, src=self.dim.next_pp_rank, group=self.dim.pp_group)
