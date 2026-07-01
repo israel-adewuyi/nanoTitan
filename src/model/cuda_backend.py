@@ -30,42 +30,46 @@ class CUDAMoEBackend:
                 dim=-1
             )  # also in fp32 (or whatever dtype router is)
             topk_weights, topk_expert_idx = torch.topk(expert_probs, dim=-1, k=self.cfg.top_k)
-        expert_weights = topk_weights / topk_weights.sum(
-            dim=-1, keepdim=True
-        )  # also in fp32 (or whatever dtype router is)
+            expert_weights = topk_weights / topk_weights.sum(
+                dim=-1, keepdim=True
+            )  # also in fp32 (or whatever dtype router is)
 
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
-        # total_assignments = num_tokens * self.cfg.top_k
+        with record_function("moe/count_expert"):
+            mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)
+            expert_count = random_ext.count_expert_kernel(
+                topk_expert_idx.to(torch.int32), mask, self.cfg.num_experts, self.cfg.top_k
+            )
 
-        mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)
-        expert_count = random_ext.count_expert_kernel(
-            topk_expert_idx.to(torch.int32), mask, self.cfg.num_experts, self.cfg.top_k
-        )
+            expert_offsets = torch.empty(
+                self.cfg.num_experts + 1, device=x.device, dtype=torch.int32
+            )
+            expert_offsets[0] = 0
+            expert_offsets[1:] = torch.cumsum(expert_count, dim=0)
+            expert_offsets_cpy = expert_offsets.clone()
 
-        expert_offsets = torch.empty(self.cfg.num_experts + 1, device=x.device, dtype=torch.int32)
-        expert_offsets[0] = 0
-        expert_offsets[1:] = torch.cumsum(expert_count, dim=0)
-        expert_offsets_cpy = expert_offsets.clone()
+        with record_function("moe/pack_tokens"):
+            packed_X, packed_tokenId, _, packed_topk_weights = random_ext.pack_tokens_kernel(
+                flat_tokens,
+                expert_weights,
+                topk_expert_idx.to(torch.int32),
+                expert_offsets_cpy,
+            )
 
-        packed_X, packed_tokenId, _, packed_topk_weights = random_ext.pack_tokens_kernel(
-            flat_tokens,
-            expert_weights,
-            topk_expert_idx.to(torch.int32),
-            expert_offsets_cpy,
-        )
+        with record_function("moe/expert_compute"):
+            # Temporary Python expert compute. Replace this with grouped GEMM later.
+            packed_expert_outputs = torch.empty_like(packed_X)
+            for expert in range(self.cfg.num_experts):
+                start = int(expert_offsets[expert].item())
+                end = int(expert_offsets[expert + 1].item())
+                if start == end:
+                    continue
+                packed_expert_outputs[start:end] = self.experts[expert](packed_X[start:end])
 
-        # Temporary Python expert compute. Replace this with grouped GEMM later.
-        packed_expert_outputs = torch.empty_like(packed_X)
-        for expert in range(self.cfg.num_experts):
-            start = int(expert_offsets[expert].item())
-            end = int(expert_offsets[expert + 1].item())
-            if start == end:
-                continue
-            packed_expert_outputs[start:end] = self.experts[expert](packed_X[start:end])
-
-        pool = random_ext.combine_tokens_kernel(
-            packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, d_model
-        ).to(dtype=packed_expert_outputs.dtype)
+        with record_function("moe/combine_tokens"):
+            pool = random_ext.combine_tokens_kernel(
+                packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, d_model
+            ).to(dtype=packed_expert_outputs.dtype)
 
         return (pool.reshape(batch, seq_len, d_model), expert_count)
