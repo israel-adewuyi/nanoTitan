@@ -128,6 +128,37 @@ class PipelineParallel:
             "time/step_time": ScalarMetric(step_time, reduce="max"),
             "time/forward_time": ScalarMetric(forward_time, reduce="max"),
         }
+        metrics.update(self._moe_route_fraction_metrics(model, moe_stats_list))
+
+        return metrics
+
+    def _moe_route_fraction_metrics(
+        self, model: NanoTitanModel, moe_stats_list
+    ) -> dict[str, ScalarMetric]:
+        metrics = {}
+        local_layer_fracs = {}
+
+        if moe_stats_list and moe_stats_list[0]:
+            num_local_layers = len(moe_stats_list[0])
+            for local_layer_idx in range(num_local_layers):
+                counts = torch.stack(
+                    [
+                        mb_stats[local_layer_idx].tokens_per_expert.detach().float()
+                        for mb_stats in moe_stats_list
+                    ],
+                    dim=0,
+                ).sum(dim=0)
+                frac = counts / counts.sum().clamp_min(1.0)
+                global_layer_idx = model.spec.layer_start + local_layer_idx
+                local_layer_fracs[global_layer_idx] = frac.cpu().tolist()
+
+        for layer_idx in range(self.cfg.model.n_layers):
+            frac = local_layer_fracs.get(layer_idx)
+            for expert_idx in range(self.cfg.model.num_experts):
+                value = 0.0 if frac is None else frac[expert_idx] / self.dim.dp_size
+                metrics[f"moe/layer_{layer_idx:02d}/expert_{expert_idx:02d}/route_frac"] = (
+                    ScalarMetric(value, reduce="sum")
+                )
 
         return metrics
 
