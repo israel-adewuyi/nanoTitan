@@ -4,6 +4,7 @@ from torch.profiler import record_function
 
 import random_ext
 from src.config import ModelConfig
+from src.model.utils import MoELayerStats
 
 
 class CUDAMoEBackend:
@@ -12,7 +13,7 @@ class CUDAMoEBackend:
         self.router = router
         self.experts = experts
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, MoELayerStats]:
         batch, seq_len, d_model = x.shape
         num_tokens = batch * seq_len
         # flatten residual stream tokens into a 2D tensor of shape (num_tokens, d_model)
@@ -33,6 +34,10 @@ class CUDAMoEBackend:
             expert_weights = topk_weights / topk_weights.sum(
                 dim=-1, keepdim=True
             )  # also in fp32 (or whatever dtype router is)
+
+        # TODO: Will experimentally validate later. But this seems like the intuitive solution
+        moe_aux_logits = self.router(flat_tokens.detach().to(router_dtype))
+        moe_aux_probs = moe_aux_logits.softmax(dim=-1)
 
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
@@ -72,4 +77,8 @@ class CUDAMoEBackend:
                 packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, d_model
             ).to(dtype=packed_expert_outputs.dtype)
 
-        return (pool.reshape(batch, seq_len, d_model), expert_count)
+        moe_stats = MoELayerStats(
+            tokens_per_expert=expert_count.detach(), probs_per_expert=moe_aux_probs, cfg=self.cfg
+        )
+
+        return (pool.reshape(batch, seq_len, d_model), moe_stats)

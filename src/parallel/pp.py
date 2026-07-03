@@ -38,7 +38,7 @@ class PipelineParallel:
         # self._reset_peak_memory_stats()
 
         optimizer.zero_grad()
-        losses = []
+        ce_losses, moe_aux_losses, moe_stats_list = [], [], []
         with record_function("forward_pass"):
             for mb_x, mb_y in zip(microbatch_x, microbatch_y, strict=False):
                 if self.dim.is_pp_first_stage:
@@ -63,18 +63,24 @@ class PipelineParallel:
                     mb_x.requires_grad_()
                     self.stage_inputs.append(mb_x)
 
-                mb_x = model(mb_x)
+                mb_x, moe_stats = model(mb_x)
+
+                moe_aux_loss = (
+                    torch.stack([s.aux_loss for s in moe_stats]).mean() / self.dim.pp_size
+                )
+                moe_aux_losses.append(moe_aux_loss)
+                moe_stats_list.append(moe_stats)
 
                 if self.dim.is_pp_last_stage:
                     # compute loss here
                     mb_y = mb_y.to(self.device)
                     loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
-                    losses.append(loss)
+                    ce_losses.append(loss)
                 else:
                     self.stage_outputs.append(mb_x)
 
                     dist.send(mb_x, dst=self.dim.next_pp_rank, group=self.dim.pp_group)
-                    losses.append(None)
+                    ce_losses.append(None)
 
         self.synchronize_device()
         forward_time = time.perf_counter() - step_start_time
@@ -84,12 +90,13 @@ class PipelineParallel:
             logger.debug(f"[RANK {self.dim.local_rank}] Beginning bwd pass")
             for microbatch_idx in reversed(range(self.cfg.runtime.num_microbatches)):
                 self.reducer.backward_grad_sync = microbatch_idx == 0
-                loss = (
-                    losses[microbatch_idx] / self.cfg.runtime.num_microbatches
+                ce_loss = (
+                    ce_losses[microbatch_idx] / self.cfg.runtime.num_microbatches
                     if self.dim.is_pp_last_stage
                     else None
                 )
-                self.backward(loss, model, microbatch_idx)
+                moe_aux_loss = moe_aux_losses[microbatch_idx] / self.cfg.runtime.num_microbatches
+                self.backward(ce_loss, moe_aux_loss, model, microbatch_idx)
 
             self.reducer.prepare_missing_grad()
             self.finalize_backward()
@@ -100,8 +107,20 @@ class PipelineParallel:
         step_time = time.perf_counter() - step_start_time
 
         metrics = {
-            "train/loss": ScalarMetric(
-                (sum(losses) / self.cfg.runtime.num_microbatches).item()
+            "train/ce_loss": ScalarMetric(
+                (sum(ce_losses) / self.cfg.runtime.num_microbatches).item()
+                if self.dim.is_pp_last_stage
+                else 0.0,
+                reduce="sum",
+            ),
+            "train/lb_loss": ScalarMetric(
+                (sum(moe_aux_losses) / self.cfg.runtime.num_microbatches).item()
+                if self.dim.is_pp_last_stage
+                else 0.0,
+                reduce="sum",
+            ),
+            "train/total_loss": ScalarMetric(
+                (sum(ce_losses) + sum(moe_aux_losses) / self.cfg.runtime.num_microbatches).item()
                 if self.dim.is_pp_last_stage
                 else 0.0,
                 reduce="sum",
@@ -112,9 +131,11 @@ class PipelineParallel:
 
         return metrics
 
-    def backward(self, loss, model, microbatch_idx):
+    def backward(self, ce_loss, moe_aux_loss, model, microbatch_idx):
         if self.dim.is_pp_last_stage:
-            loss.backward()
+            torch.autograd.backward(
+                [ce_loss, moe_aux_loss],
+            )
         else:
             out_acts = self.stage_outputs[microbatch_idx]
             out_acts_grad = torch.empty(
@@ -127,7 +148,9 @@ class PipelineParallel:
                 device=self.device,
             )
             dist.recv(out_acts_grad, src=self.dim.next_pp_rank, group=self.dim.pp_group)
-            out_acts.backward(out_acts_grad)
+            torch.autograd.backward(
+                [out_acts, moe_aux_loss], [out_acts_grad, torch.ones_like(moe_aux_loss)]
+            )
 
         # incoming.backward()
         if not self.dim.is_pp_first_stage:

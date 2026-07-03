@@ -9,7 +9,10 @@ from jaxtyping import Float
 
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
+from src.model.utils import MoELayerStats
 from src.model_utils import ModelShardSpec
+
+# TODO: model_utils vs model.utils.. this isn't clean
 
 
 def _parameter_count(module: nn.Module) -> int:
@@ -203,16 +206,12 @@ class TransformerLayer(nn.Module):
         )
 
     def forward(
-        self,
-        x: torch.Tensor[Float, "batch seq_len d_model"],
-        return_moe_stats: bool = False,
-    ) -> torch.Tensor[Float, "batch seq_len d_model"] | tuple[torch.Tensor, torch.Tensor]:
+        self, x: torch.Tensor[Float, "batch seq_len d_model"]
+    ) -> tuple[torch.Tensor, MoELayerStats]:
         x = self.attn(self.attn_norm(x)) + x
-        out, tokens_per_expert = self.ffn(self.ffn_norm(x))
+        out, layer_stats = self.ffn(self.ffn_norm(x))
         x = out + x
-        if return_moe_stats:
-            return x, tokens_per_expert
-        return x
+        return x, layer_stats
 
 
 class NanoTitanModel(nn.Module):
@@ -241,19 +240,14 @@ class NanoTitanModel(nn.Module):
     def active_parameter_count(self) -> int:
         return sum(layer.active_parameter_count() for layer in self.blocks)
 
-    def forward(
-        self, x: torch.Tensor, return_moe_stats: bool = False
-    ) -> torch.Tensor | tuple[torch.Tensor, list[torch.Tensor]]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[MoELayerStats]]:
+        moe_stats = []
+
         for block in self.blocks:
-            x = block(x)
-        # moe_stats = []
-        # for layer in self.layers:
-        #     if return_moe_stats:
-        #         x, tokens_per_expert = layer(x, return_moe_stats=True)
-        #         moe_stats.append(tokens_per_expert.detach())
-        #     else:
-        #         x = layer(x)
-        # x = self.token_embed.project(x)
-        # if return_moe_stats:
-        #     return x, moe_stats
-        return x
+            if isinstance(block, TransformerLayer):
+                x, layer_stats = block(x)
+                moe_stats.append(layer_stats)
+            else:
+                x = block(x)
+
+        return x, moe_stats
