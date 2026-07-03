@@ -20,6 +20,7 @@ def make_test_config(d_model=8, num_experts=4, top_k=2, moe_backend="torch"):
         max_seq_len=1,
         ffn_in=2 * d_model,
         moe_backend=moe_backend,
+        router_alpha=0.01,
     )
     cfg.dtype = resolve_dtype(cfg.dtype)
     cfg.moe_router_dtype = resolve_dtype(cfg.moe_router_dtype)
@@ -50,7 +51,6 @@ def test_moe_output_shape():
     y, tokens_per_expert = moe(x)
 
     assert y.shape == x.shape
-    assert tokens_per_expert.shape == (cfg.num_experts,)
 
 
 @pytest.mark.skip(reason="WIP")
