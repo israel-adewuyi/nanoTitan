@@ -8,7 +8,7 @@ import torch.distributed as dist
 
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import cleanup, get_world_size, init_distributed
-from src.metrics import MetricsLogger, ScalarMetric
+from src.metrics import HistogramMetric, MetricsLogger, ScalarMetric
 from src.model.model import NanoTitanModel
 from src.model_utils import get_model_shard_specs
 from src.optim import setup_optimizer
@@ -29,7 +29,9 @@ from src.utils import (
 logger = logging.getLogger(__name__)
 
 
-def reduce_metrics(metrics: dict[str, ScalarMetric], device: torch.device) -> dict[str, float]:
+def reduce_metrics(
+    metrics: dict[str, ScalarMetric | HistogramMetric], device: torch.device
+) -> dict[str, float | torch.Tensor]:
     reduced = {}
     world_size = dist.get_world_size()
 
@@ -46,7 +48,10 @@ def reduce_metrics(metrics: dict[str, ScalarMetric], device: torch.device) -> di
         elif metric.reduce != "none":
             raise ValueError(f"Unknown metric reduction: {metric.reduce}")
 
-        reduced[name] = value.item()
+        if value.ndim == 0:
+            reduced[name] = value.item()
+        else:
+            reduced[name] = value.detach().cpu().to(torch.float32)
 
     return reduced
 

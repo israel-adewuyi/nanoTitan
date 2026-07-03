@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import torch
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -12,9 +13,12 @@ class MetricsLogger:
         self.log_dir = Path(log_dir)
         self.writer = SummaryWriter(log_dir=str(self.log_dir))
 
-    def log(self, step: int, metrics: dict[str, float]) -> None:
+    def log(self, step: int, metrics: dict[str, float | torch.Tensor]) -> None:
         for name, value in metrics.items():
-            self.writer.add_scalar(name, value, step)
+            if isinstance(value, torch.Tensor) and value.ndim > 0:
+                self.writer.add_histogram(name, value, step)
+            else:
+                self.writer.add_scalar(name, value, step)
 
     def log_config(self, config_dict: dict) -> None:
         self.writer.add_text("config", json.dumps(config_dict, indent=2), 0)
@@ -29,4 +33,10 @@ ReduceOp = Literal["mean", "max", "sum", "none"]
 @dataclass(frozen=True)
 class ScalarMetric:
     value: float
+    reduce: ReduceOp = "mean"
+
+
+@dataclass(frozen=True)
+class HistogramMetric:
+    value: torch.Tensor
     reduce: ReduceOp = "mean"

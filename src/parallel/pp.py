@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.profiler import record_function
 
 from src.config import AppConfig
-from src.metrics import ScalarMetric
+from src.metrics import HistogramMetric, ScalarMetric
 from src.model.model import NanoTitanModel
 from src.parallel.reducer import ReducerV1
 from src.parallel_dims import ParallelDims
@@ -134,7 +134,7 @@ class PipelineParallel:
 
     def _moe_route_fraction_metrics(
         self, model: NanoTitanModel, moe_stats_list
-    ) -> dict[str, ScalarMetric]:
+    ) -> dict[str, ScalarMetric | HistogramMetric]:
         metrics = {}
         local_layer_fracs = {}
 
@@ -150,12 +150,18 @@ class PipelineParallel:
                 ).sum(dim=0)
                 frac = counts / counts.sum().clamp_min(1.0)
                 global_layer_idx = model.spec.layer_start + local_layer_idx
-                local_layer_fracs[global_layer_idx] = frac.cpu().tolist()
+                local_layer_fracs[global_layer_idx] = frac.detach().cpu()
 
         for layer_idx in range(self.cfg.model.n_layers):
             frac = local_layer_fracs.get(layer_idx)
+            hist_value = torch.zeros(self.cfg.model.num_experts, dtype=torch.float32)
+            if frac is not None:
+                hist_value = frac / self.dim.dp_size
+            metrics[f"moe/layer_{layer_idx:02d}/route_frac_dist"] = HistogramMetric(
+                hist_value, reduce="sum"
+            )
             for expert_idx in range(self.cfg.model.num_experts):
-                value = 0.0 if frac is None else frac[expert_idx] / self.dim.dp_size
+                value = 0.0 if frac is None else frac[expert_idx].item() / self.dim.dp_size
                 metrics[f"moe/layer_{layer_idx:02d}/expert_{expert_idx:02d}/route_frac"] = (
                     ScalarMetric(value, reduce="sum")
                 )
