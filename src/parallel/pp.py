@@ -160,11 +160,6 @@ class PipelineParallel:
             metrics[f"moe/layer_{layer_idx:02d}/route_frac_dist"] = HistogramMetric(
                 hist_value, reduce="sum"
             )
-            for expert_idx in range(self.cfg.model.num_experts):
-                value = 0.0 if frac is None else frac[expert_idx].item() / self.dim.dp_size
-                metrics[f"moe/layer_{layer_idx:02d}/expert_{expert_idx:02d}/route_frac"] = (
-                    ScalarMetric(value, reduce="sum")
-                )
 
         return metrics
 
