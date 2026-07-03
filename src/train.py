@@ -168,10 +168,12 @@ def main() -> None:
                     metrics["train/tokens_per_step"] / metrics["time/step_time"]
                 )
                 metrics["train/ce_loss"] = metrics["train/ce_loss"] / dims.dp_size
-                
+
                 # Log metrics to tensorboard on rank 0
                 if dims.local_rank == 0:
-                    logger.info(f"Rank is {dims.global_rank}, {metrics['train/ce_loss'], metrics['train/lb_loss']}")
+                    logger.info(
+                        f"Rank is {dims.global_rank}, {metrics['train/ce_loss'], metrics['train/lb_loss']}"
+                    )
                     metrics_logger.log(step=iter, metrics=metrics)
 
                 iter += 1
