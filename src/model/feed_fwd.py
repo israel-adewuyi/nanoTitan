@@ -34,6 +34,70 @@ class FFN(nn.Module):
         return sum(param.numel() for param in self.parameters())
 
 
+class ExpertFFN(nn.Module):
+    """Feedforward network implementation"""
+
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.cfg = cfg
+
+        # SwiGLU uses two parallel input projections
+        self.W_gate = nn.Parameter(
+            torch.empty(
+                cfg.num_experts,
+                cfg.d_model,
+                cfg.ffn_in,
+                dtype=cfg.dtype,
+            )
+        )
+        self.W_val = nn.Parameter(
+            torch.empty(
+                cfg.num_experts,
+                cfg.d_model,
+                cfg.ffn_in,
+                dtype=cfg.dtype,
+            )
+        )
+        self.W_out = nn.Parameter(
+            torch.empty(
+                cfg.num_experts,
+                cfg.ffn_in,
+                cfg.d_model,
+                dtype=cfg.dtype,
+            )
+        )
+        self.silu = nn.SiLU()
+        self._reset_parameters()
+
+    def _reset_parameters(self):
+        nn.init.normal_(self.W_gate)
+        nn.init.normal_(self.W_val)
+        nn.init.normal_(self.W_out)
+
+    def forward(
+        self,
+        packed_X: Float[torch.Tensor, "num_assignments d_model"],
+        expert_offset,  # TODO: shape anotation
+    ) -> Float[torch.Tensor, "num_assignments d_model"]:
+        out = torch.empty_like(packed_X)
+
+        for e in range(self.cfg.num_experts):
+            start = expert_offset[e].item()
+            end = expert_offset[e + 1].item()  # TODO: Verify that expert offset is num_experts + 1
+
+            expert_input = packed_X[start:end]
+
+            gate = self.silu(expert_input @ self.W_gate[e])
+            val = expert_input @ self.W_val[e]
+            temp_out = gate * val
+            out[start:end] = temp_out @ self.W_out[e]
+
+        return out
+
+    def parameter_count(self) -> int:
+        return sum(param.numel() for param in self.parameters())
+
+
 class MoE(nn.Module):
     """
     A Mixture of Experts layer
