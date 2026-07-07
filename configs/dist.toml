@@ -1,22 +1,25 @@
-run_name = "gpipe_pp_demo"
+run_name = "cuda_backend"
+max_steps = 2
 
 [model]
 vocab_size = 50257
 d_model = 128
-max_seq_len = 128
-n_layers = 6
+max_seq_len = 768
+n_layers = 8
 d_head = 16
 n_heads = 8
 ffn_in = 512
 num_experts = 16
 top_k = 2
+router_alpha = 0.01
 moe_backend = "cuda"
+dtype = "float32"
 
 [trainer]
 seed = 42
 device_id = 3
 eval_every_step = -1
-per_device_batch_size = 1
+per_device_batch_size = 16
 
 [data]
 train_tokens_path = "data/preprocessed/tinystories_train.bin"
@@ -35,9 +38,9 @@ pp_size = 2
 
 [profiler]
 enabled = false
-wait_steps = 50
-warmup_steps = 10
-active_steps = 5
+wait_steps = 2
+warmup_steps = 2
+active_steps = 2
 record_shapes = true
 profile_memory = true
 with_stack = false

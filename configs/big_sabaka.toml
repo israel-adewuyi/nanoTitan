@@ -11,6 +11,7 @@ n_heads = 8
 ffn_in = 2048
 num_experts = 16
 top_k = 2
+router_alpha = 0.01
 moe_backend = "cuda"
 
 [trainer]

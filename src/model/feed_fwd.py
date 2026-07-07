@@ -106,7 +106,7 @@ class MoE(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
         self.cfg = cfg
-        self.experts = nn.ModuleList(FFN(cfg) for _ in range(self.cfg.num_experts))
+        self.experts = ExpertFFN(cfg)
         self.router = nn.Linear(
             self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.moe_router_dtype
         )
@@ -117,8 +117,8 @@ class MoE(nn.Module):
 
     def active_parameter_count(self) -> int:
         router_params = sum(param.numel() for param in self.router.parameters())
-        expert_params = self.experts[0].parameter_count()
-        return router_params + self.cfg.top_k * expert_params
+        expert_params = self.experts.parameter_count()
+        return router_params + self.cfg.top_k * (expert_params / self.cfg.num_experts)
 
     def forward(self, x: Float[torch.Tensor, "batch seq_len d_model"]) -> tuple:
         return self.moe_backend.forward(x)

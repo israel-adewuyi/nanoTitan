@@ -63,14 +63,7 @@ class CUDAMoEBackend:
             )
 
         with record_function("moe/expert_compute"):
-            # Temporary Python expert compute. Replace this with grouped GEMM later.
-            packed_expert_outputs = torch.empty_like(packed_X)
-            for expert in range(self.cfg.num_experts):
-                start = int(expert_offsets[expert].item())
-                end = int(expert_offsets[expert + 1].item())
-                if start == end:
-                    continue
-                packed_expert_outputs[start:end] = self.experts[expert](packed_X[start:end])
+            packed_expert_outputs = self.experts(packed_X, expert_offsets)
 
         with record_function("moe/combine_tokens"):
             pool = random_ext.combine_tokens_kernel(
