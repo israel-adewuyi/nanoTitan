@@ -1,5 +1,6 @@
 #include <torch/extension.h>
 #include <cstdint>
+#include <string>
 
 // Declare the function implemented in random.cpp
 torch::Tensor random_op(torch::Tensor t, int x);
@@ -36,6 +37,8 @@ std::tuple<torch::Tensor, torch::Tensor> pack_kernel_backward(
     torch::Tensor topk_experts
 );
 
+torch::Tensor gemm_kernel(torch::Tensor A, torch::Tensor B, const std::string& implementation = "tiled");
+torch::Tensor tiled_gemm_kernel(torch::Tensor A, torch::Tensor B);
 torch::Tensor naive_gemm_kernel(torch::Tensor A, torch::Tensor B);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -48,6 +51,15 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("combine_tokens_kernel", &combine_tokens_kernel, "Kernel to weight-average token vectors from K experts into the residual stream");
     m.def("combine_kernel_backward", &combine_kernel_backward, "Kernel to run bwd pass for the expert outputs combination");
 
+    m.def(
+        "gemm_kernel",
+        &gemm_kernel,
+        "GEMM kernel",
+        pybind11::arg("A"),
+        pybind11::arg("B"),
+        pybind11::arg("implementation") = "tiled"
+    );
+    m.def("tiled_gemm_kernel", &tiled_gemm_kernel, "Tiled GEMM kernel");
     m.def("naive_gemm_kernel", &naive_gemm_kernel, "Naive GEMM kernel");
 
     m.def("pack_kernel_backward", &pack_kernel_backward, "Kernel to run bwd pass on the pack ops");
