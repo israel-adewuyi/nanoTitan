@@ -13,7 +13,7 @@ TOLERANCES = {
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("implementation", [None, "tiled", "naive"])
-@pytest.mark.parametrize("shape", [(10, 20, 30), (33, 17, 65)])
+@pytest.mark.parametrize("shape", [(10, 20, 30), (33, 45, 65), (33, 7, 65), (34, 32, 34)])
 def test_gemm_kernel_small(dtype, implementation, shape):
     M, N, K = shape
 
@@ -40,10 +40,10 @@ def test_naive_gemm_kernel_wrapper():
 
     torch.testing.assert_close(C, A @ B, rtol=1e-5, atol=1e-6)
 
-
-def test_tiled_gemm_equals_naive_gemm_kernel():
-    A = torch.randn((10, 30), device="cuda")
-    B = torch.randn((30, 20), device=A.device)
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_tiled_gemm_equals_naive_gemm_kernel(dtype):
+    A = torch.randn((10, 30), dtype=dtype, device="cuda")
+    B = torch.randn((30, 20), dtype=dtype, device=A.device)
 
     naive_C = random_ext.naive_gemm_kernel(A, B)
     tiled_C = random_ext.tiled_gemm_kernel(A, B)
