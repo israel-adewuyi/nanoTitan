@@ -40,6 +40,7 @@ def test_naive_gemm_kernel_wrapper():
 
     torch.testing.assert_close(C, A @ B, rtol=1e-5, atol=1e-6)
 
+
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_tiled_gemm_equals_naive_gemm_kernel(dtype):
     A = torch.randn((10, 30), dtype=dtype, device="cuda")
