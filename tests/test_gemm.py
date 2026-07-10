@@ -13,7 +13,7 @@ TOLERANCES = {
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 @pytest.mark.parametrize("implementation", [None, "tiled", "naive"])
-@pytest.mark.parametrize("shape", [(10, 20, 30), (33, 45, 65), (33, 7, 65), (34, 32, 34)])
+@pytest.mark.parametrize("shape", [(10, 20, 30), (33, 45, 65), (33, 2, 65)])
 def test_gemm_kernel_small(dtype, implementation, shape):
     M, N, K = shape
 

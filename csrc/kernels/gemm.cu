@@ -156,8 +156,8 @@ torch::Tensor launch_tiled_gemm(
 
     dim3 threads(BLOCK_DIM, BLOCK_DIM);
     dim3 blocks (
-        (M + threads.y - 1) / threads.y,
-        (N + threads.x - 1) / threads.x
+        (N + threads.x - 1) / threads.x,
+        (M + threads.y - 1) / threads.y
     );
 
     c10::cuda::CUDAGuard guard(A.device());
