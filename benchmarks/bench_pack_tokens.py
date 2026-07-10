@@ -9,13 +9,11 @@ def make_inputs(tokens, hidden_dim, top_k, num_experts, device, dtype):
     X = torch.randn(tokens, hidden_dim, device=device, dtype=dtype)
 
     # Deterministic-ish random routing.
-    topk_experts = torch.randint(
-        low=0,
-        high=num_experts,
-        size=(tokens, top_k),
-        device=device,
-        dtype=torch.int32,
-    )
+    topk_experts = torch.multinomial(
+        torch.ones(tokens, num_experts, device=device),
+        num_samples=top_k,
+        replacement=False,
+    ).to(torch.int32)
 
     topk_weights = torch.rand(tokens, top_k, device=device, dtype=torch.float32)
 
