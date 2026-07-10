@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--ncu", default=os.environ.get("NCU", "ncu"))
-    parser.add_argument("--set", dest="section_set", default="speed-of-light")
+    parser.add_argument("--set", dest="section_set", default="detailed")
     parser.add_argument("--kernel-name", default="regex:.*pack_tokens_kernel_cu.*")
     parser.add_argument("--profile-launches", type=int, default=1)
     parser.add_argument("--no-force-overwrite", action="store_true")
@@ -63,7 +63,7 @@ def build_command(
         "--dtype",
         args.dtype,
         "--warmup",
-        str(args.warmup),
+        str(args.warmup + int(args.check)),
         "--iters",
         str(max(args.iters, args.profile_launches)),
     ]
