@@ -3,6 +3,7 @@ import pytest
 
 import random_ext
 
+
 @pytest.mark.parametrize("shape", [(8192, 3, 1, 8192)])
 def test_grouped_gemm_kernel_small_smoke(shape):
     assignments, num_experts, d_model, d_ffn_in = shape
