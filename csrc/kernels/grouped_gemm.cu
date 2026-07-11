@@ -4,8 +4,8 @@
 #include <c10/cuda/CUDAGuard.h>
 
 #define BLOCK_M 16
-#define BLOCK_N 16
-#define MAX_TOKEN_BLOCKS 16
+#define BLOCK_N 64
+#define MAX_TOKEN_BLOCKS 64 // If number of tokens routed to some expert exceeds 
 
 template <typename T>
 __global__ void grouped_gemm_cu(
