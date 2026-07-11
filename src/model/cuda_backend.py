@@ -4,6 +4,7 @@ from torch.profiler import record_function
 
 import random_ext
 from src.config import ModelConfig
+from src.model.moe_ops import combine_tokens_fn, pack_tokens_fn
 from src.model.utils import MoELayerStats
 
 
@@ -55,7 +56,7 @@ class CUDAMoEBackend:
             expert_offsets_cpy = expert_offsets.clone()
 
         with record_function("moe/pack_tokens"):
-            packed_X, packed_tokenId, _, packed_topk_weights = random_ext.pack_tokens_kernel(
+            packed_X, packed_tokenId, _, packed_topk_weights = pack_tokens_fn(
                 flat_tokens,
                 expert_weights,
                 topk_expert_idx.to(torch.int32),
@@ -66,7 +67,7 @@ class CUDAMoEBackend:
             packed_expert_outputs = self.experts(packed_X, expert_offsets)
 
         with record_function("moe/combine_tokens"):
-            pool = random_ext.combine_tokens_kernel(
+            pool = combine_tokens_fn(
                 packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, d_model
             ).to(dtype=packed_expert_outputs.dtype)
 

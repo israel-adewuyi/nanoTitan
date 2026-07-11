@@ -9,7 +9,7 @@ __global__ void combine_kernel_backward_cu(
     const T* __restrict__ expert_outputs,
     const int32_t* __restrict__ packed_tokenIds,
     const float* __restrict__ packed_topk_weights,
-    const T* __restrict__ residual_stream_grad,
+    const float* __restrict__ residual_stream_grad,
     float* __restrict__ packed_topk_weights_grad,
     T* __restrict__ expert_output_grad,
     size_t num_assignments,
@@ -31,7 +31,7 @@ __global__ void combine_kernel_backward_cu(
         size_t resid_stream_idx = token_id * hidden_dim + h;
         size_t out_idx = assignment * hidden_dim + h;
 
-        float dy = static_cast<float>(residual_stream_grad[resid_stream_idx]);
+        float dy = residual_stream_grad[resid_stream_idx];
 
         weight_grad += dy * static_cast<float>(expert_outputs[out_idx]);
         expert_output_grad[out_idx] = static_cast<T>(dy * weight);
@@ -50,6 +50,7 @@ std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
     TORCH_CHECK(packed_tokenIds.is_contiguous(), "Tensor should be laid out in contiguous memory location");
     TORCH_CHECK(packed_topk_weights.is_contiguous(), "Tensor should be laid out in contiguous memory location");
     TORCH_CHECK(residual_stream_grad.is_contiguous(), "Tensor should be laid out in contiguous memory location");
+    TORCH_CHECK(residual_stream_grad.scalar_type() == torch::kFloat32, "residual_stream_grad must be float32");
 
     c10::cuda::CUDAGuard guard(expert_outputs.device());
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
@@ -79,7 +80,7 @@ std::tuple<torch::Tensor, torch::Tensor> combine_kernel_backward(
                 expert_outputs.data_ptr<scalar_t>(), 
                 packed_tokenIds.data_ptr<int32_t>(),
                 packed_topk_weights.data_ptr<float>(),
-                residual_stream_grad.data_ptr<scalar_t>(),
+                residual_stream_grad.data_ptr<float>(),
                 packed_topk_weights_grad.data_ptr<float>(),
                 expert_output_grad.data_ptr<scalar_t>(),
                 num_assignments,

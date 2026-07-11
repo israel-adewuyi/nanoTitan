@@ -31,22 +31,33 @@ class TorchMoEBackend:
 
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
-        # accumulate the weighted results of each expert per token
-        pool = torch.zeros_like(flat_tokens)
-        tokens_per_expert = torch.zeros((self.cfg.num_experts), dtype=torch.long, device=x.device)
+        tokens_per_expert = torch.bincount(
+            topk_expert_idx.reshape(-1), minlength=self.cfg.num_experts
+        )
+        expert_offsets = torch.empty(self.cfg.num_experts + 1, dtype=torch.long, device=x.device)
+        expert_offsets[0] = 0
+        expert_offsets[1:] = torch.cumsum(tokens_per_expert, dim=0)
+
+        total_assignments = flat_tokens.shape[0] * self.cfg.top_k
+        packed_X = torch.empty(
+            (total_assignments, d_model), dtype=flat_tokens.dtype, device=x.device
+        )
+        packed_token_ids = torch.empty(total_assignments, dtype=torch.long, device=x.device)
+        packed_weights = torch.empty(total_assignments, dtype=expert_weights.dtype, device=x.device)
 
         for expert in range(self.cfg.num_experts):
             indices = torch.argwhere(topk_expert_idx == expert)
-            # if no token chose current expert, continue
             if indices.numel() == 0:
                 continue
-            # get the residual stream vector for each token by indexing into flat tokens with all tokens that chose current expert
-            expert_toks = flat_tokens[indices[:, 0]]
+            start = expert_offsets[expert].item()
+            end = expert_offsets[expert + 1].item()
+            packed_X[start:end] = flat_tokens[indices[:, 0]]
+            packed_token_ids[start:end] = indices[:, 0]
+            packed_weights[start:end] = expert_weights[indices[:, 0], indices[:, 1]]
 
-            tokens_per_expert[expert] += expert_toks.shape[0]
-
-            pool[indices[:, 0]] += self.experts[expert](expert_toks) * expert_weights[
-                indices[:, 0], indices[:, 1]
-            ].unsqueeze(1)
+        packed_outputs = self.experts(packed_X, expert_offsets)
+        pool = torch.zeros_like(flat_tokens)
+        weighted_outputs = (packed_outputs * packed_weights.unsqueeze(1)).to(pool.dtype)
+        pool.index_add_(0, packed_token_ids, weighted_outputs)
 
         return (pool.reshape(batch, seq_len, d_model), tokens_per_expert)

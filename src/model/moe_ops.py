@@ -5,7 +5,7 @@ import torch
 import random_ext
 
 
-def combine_tokens(
+def combine_tokens_fn(
     packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, hidden_dim
 ):
     return CombineTokensFN.apply(
@@ -13,7 +13,7 @@ def combine_tokens(
     )
 
 
-def pack_tokens(X, topk_weights, topk_experts, expert_offset_cpy):
+def pack_tokens_fn(X, topk_weights, topk_experts, expert_offset_cpy):
     return PackTokensFN.apply(X, topk_weights, topk_experts, expert_offset_cpy)
 
 
@@ -41,10 +41,14 @@ class PackTokensFN(torch.autograd.Function):
         packed_tokenId, packed_expert, topk_experts = ctx.saved_tensors
 
         X_grad, topk_weights_grad = random_ext.pack_kernel_backward(
-            packed_X_grad, packed_topk_weights_grad, packed_tokenId, packed_expert, topk_experts
+            packed_X_grad.contiguous(),
+            packed_topk_weights_grad.contiguous(),
+            packed_tokenId,
+            packed_expert,
+            topk_experts,
         )
 
-        return X_grad, topk_weights_grad, None, None, None
+        return X_grad, topk_weights_grad, None, None
 
 
 class CombineTokensFN(torch.autograd.Function):
@@ -69,7 +73,7 @@ class CombineTokensFN(torch.autograd.Function):
             packed_expert_outputs,
             packed_tokenId,
             packed_topk_weights,
-            d_resid_stream.contiguous(),
+            d_resid_stream.to(torch.float32).contiguous(),
             ctx.hidden_dim,
         )
 
