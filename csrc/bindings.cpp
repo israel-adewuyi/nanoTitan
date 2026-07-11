@@ -40,6 +40,11 @@ std::tuple<torch::Tensor, torch::Tensor> pack_kernel_backward(
 torch::Tensor gemm_kernel(torch::Tensor A, torch::Tensor B, const std::string& implementation = "tiled");
 torch::Tensor tiled_gemm_kernel(torch::Tensor A, torch::Tensor B);
 torch::Tensor naive_gemm_kernel(torch::Tensor A, torch::Tensor B);
+torch::Tensor grouped_gemm_kernel(
+    torch::Tensor X, 
+    torch::Tensor expert_offset,
+    torch::Tensor weights
+);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("random_op", &random_op, "Random op");
@@ -63,4 +68,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("naive_gemm_kernel", &naive_gemm_kernel, "Naive GEMM kernel");
 
     m.def("pack_kernel_backward", &pack_kernel_backward, "Kernel to run bwd pass on the pack ops");
+
+    m.def("grouped_gemm_kernel", &grouped_gemm_kernel, "Kernel to run grouped expert fwd pass");
 }

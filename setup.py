@@ -16,6 +16,7 @@ setup(
                 "csrc/kernels/gemm.cu",
                 "csrc/kernels/copy_kernel.cu",
                 "csrc/kernels/pack_tokens.cu",
+                "csrc/kernels/grouped_gemm.cu",
                 "csrc/kernels/count_experts.cu",
                 "csrc/kernels/combine_kernels.cu",
                 "csrc/kernels/backward_combine_kernel.cu",
