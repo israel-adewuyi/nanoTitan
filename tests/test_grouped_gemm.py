@@ -3,8 +3,27 @@ import torch
 
 import random_ext
 
+SUPPORTED_DTYPES = [
+    pytest.param(torch.float32, id="float32"),
+    pytest.param(torch.float16, id="float16"),
+    pytest.param(torch.bfloat16, id="bfloat16"),
+]
 
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+# ExpertFFN stores its projection matrices as:
+#   W_gate/W_val: [num_experts, d_model, ffn_in]
+#   W_out:        [num_experts, ffn_in, d_model]
+# These dimensions match the smaller CUDA model config in configs/dist.toml.
+MOE_PROJECTION_SHAPES = [
+    pytest.param(128, 512, id="up-projection"),
+    pytest.param(512, 128, id="down-projection-w-out"),
+]
+
+
+def torch_grouped_gemm(X, weights, offsets):
+    return torch.cat([X[offsets[e] : offsets[e + 1]] @ weights[e] for e in range(len(offsets) - 1)])
+
+
+@pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
 @pytest.mark.parametrize("shape", [(4, 2, 4, 4), (128, 4, 16, 32), (8192, 3, 1, 8192)])
 def test_grouped_gemm_kernel_small_smoke(dtype, shape):
     assignments, num_experts, d_model, d_ffn_in = shape
@@ -35,29 +54,52 @@ def test_grouped_gemm_kernel_small_smoke(dtype, shape):
     torch.testing.assert_close(out, expected, rtol=2e-2, atol=2e-2)
 
 
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
-def test_grouped_gemm_backward_matches_autograd(dtype):
+@pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
+@pytest.mark.parametrize(("input_features", "output_features"), MOE_PROJECTION_SHAPES)
+def test_grouped_gemm_forward_matches_moe_projection(dtype, input_features, output_features):
     counts = [3, 1, 4]
     offsets = [0, 3, 4, 8]
-    assignments, d_model, d_ffn_in = sum(counts), 7, 11
+    assignments = sum(counts)
     expert_offset = torch.tensor(offsets, dtype=torch.int32, device="cuda")
 
-    X = torch.randn(assignments, d_model, dtype=dtype, device="cuda", requires_grad=True)
+    X = torch.randn(assignments, input_features, dtype=dtype, device="cuda")
+    weights = torch.randn(len(counts), input_features, output_features, dtype=dtype, device="cuda")
+
+    actual = random_ext.grouped_gemm_kernel(X, expert_offset, weights)
+    expected = torch_grouped_gemm(X, weights, offsets)
+
+    assert actual.shape == (assignments, output_features)
+    torch.testing.assert_close(actual, expected, rtol=2e-2, atol=2e-2)
+
+
+@pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
+@pytest.mark.parametrize(("input_features", "output_features"), MOE_PROJECTION_SHAPES)
+def test_grouped_gemm_backward_matches_moe_projection_autograd(
+    dtype, input_features, output_features
+):
+    counts = [3, 1, 4]
+    offsets = [0, 3, 4, 8]
+    assignments = sum(counts)
+    expert_offset = torch.tensor(offsets, dtype=torch.int32, device="cuda")
+
+    X = torch.randn(assignments, input_features, dtype=dtype, device="cuda", requires_grad=True)
     weights = torch.randn(
         len(counts),
-        d_model,
-        d_ffn_in,
+        input_features,
+        output_features,
         dtype=dtype,
         device="cuda",
         requires_grad=True,
     )
-    d_out = torch.randn(assignments, d_ffn_in, dtype=dtype, device="cuda")
+    d_out = torch.randn(assignments, output_features, dtype=dtype, device="cuda")
 
-    out = torch.cat([X[offsets[e] : offsets[e + 1]] @ weights[e] for e in range(len(counts))])
+    out = torch_grouped_gemm(X, weights, offsets)
     out.backward(d_out)
 
     dX = random_ext.bwd_grouped_gemm_up_proj_dX_kernel(weights.detach(), expert_offset, d_out)
     dW = random_ext.bwd_grouped_gemm_up_proj_dW_kernel(X.detach(), expert_offset, d_out)
 
+    assert dX.shape == X.shape
+    assert dW.shape == weights.shape
     torch.testing.assert_close(dX, X.grad, rtol=2e-2, atol=2e-2)
     torch.testing.assert_close(dW, weights.grad, rtol=2e-2, atol=2e-2)
