@@ -13,7 +13,7 @@ __global__ void grouped_gemm_cu(
     const int32_t* __restrict__ expert_offset, //[#experts, ]
     const T* __restrict__ Weights, //[#experts, d_model, d_ffn_in]
     T* __restrict__ out, //[#assignments, d_ffn_in]
-    size_t hidden_dim_A,
+    size_t hidden_dim_A, //TODO: Bad Notation, sir. I should change this. WTF does hidden_dimA and B mean for someone seeing the repo for the firs time?
     size_t hidden_dim_B
 ){
     size_t expert_id = blockIdx.z;
