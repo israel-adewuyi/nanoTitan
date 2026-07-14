@@ -1,3 +1,58 @@
+# nanoTitan
+
+**nanoTitan is a Mixture-of-Experts training stack for learning distributed training and CUDA kernel engineering from first principles.**
+
+The repository currently contains a small autoregressive LM, 2D parallelism (DP + PP), a CUDA-backed MoE dispatch path, autograd kernels, and early grouped-GEMM implementations.
+
+---
+
+## What is implemented
+
+### Distributed training
+
+- A per-parameter all-reduce DDP baseline.
+- A bucketed reducer with asynchronous all-reduce and autograd hooks.
+- Explicit DP and PP process-group construction.
+- GPipe-style pipeline parallelism with microbatches.
+- 2D DP × PP composition.
+
+### Mixture of Experts
+
+- Top-k routing with renormalized FP32 gate weights.
+- Load-balancing loss and per-layer routing statistics.
+- CUDA kernels for expert counting, token packing, and weighted combine.
+- Custom autograd wrappers and backward kernels for pack and combine.
+- FP32, FP16, and BF16 correctness tests for dispatch operations.
+- End-to-end pack → combine gradient parity tests.
+
+### CUDA and profiling
+
+- Expert-grouped GEMM forward kernel.
+- Grouped-GEMM gradients for inputs and weights.
+- Tests covering both up-projection and down-projection matrix shapes.
+- Pack/combine microbenchmarks and an Nsight Compute launcher.
+
+---
+
+## Repository layout
+
+```text
+nanoTitan/
+├── benchmarks/        # CUDA and training microbenchmarks
+├── configs/           # Model and parallelism configurations
+├── csrc/
+│   ├── kernels/       # CUDA dispatch, combine, and GEMM kernels
+│   └── runtime/       # C++/CUDA runtime experiments
+├── scripts/           # Profiling utilities
+├── src/
+│   ├── data/          # Packed-token data pipeline
+│   ├── model/         # Transformer and MoE implementations
+│   └── parallel/      # Data and pipeline parallelism
+└── tests/             # Model, CUDA, autograd, and distributed tests
+```
+
+---
+
 # ToDO
 
 - [x] DDP
