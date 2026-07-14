@@ -19,8 +19,7 @@ __global__ void bwd_grouped_gemm_up_proj_dX_cu(
 ){
     size_t expert_id = blockIdx.z;
     size_t local_assignment = blockIdx.y * blockDim.y + threadIdx.y;
-    int ass_idx;//fill later
-    
+
     int start = expert_offset[expert_id];
     int end = expert_offset[expert_id + 1];
 
@@ -46,7 +45,7 @@ __global__ void bwd_grouped_gemm_up_proj_dX_cu(
 torch::Tensor bwd_grouped_gemm_up_proj_dX_kernel(
     torch::Tensor W_gate,
     torch::Tensor expert_offset,
-    torch::Tensor dOut,
+    torch::Tensor dOut
 ){
     TORCH_CHECK(W_gate.is_contiguous(), "W must be contiguous");
     TORCH_CHECK(dOut.is_contiguous(), "dOut must be contiguous");
@@ -54,6 +53,7 @@ torch::Tensor bwd_grouped_gemm_up_proj_dX_kernel(
     int assignments = dOut.size(0);
     int hidden_dim = W_gate.size(1);
     int d_in = W_gate.size(2);
+    int num_experts = W_gate.size(0);
 
     torch::Tensor dX =  torch::empty(
         {static_cast<int64_t>(assignments), static_cast<int64_t>(hidden_dim)},
@@ -76,7 +76,7 @@ torch::Tensor bwd_grouped_gemm_up_proj_dX_kernel(
         W_gate.scalar_type(),
         "bwd_grouped_kernel_up_proj_dX",
         [&] {
-            bwd_grouped_gemm_gate_proj_cu<scalar_t><<<blocks, threads, 0, stream>>>(
+            bwd_grouped_gemm_up_proj_dX_cu<scalar_t><<<blocks, threads, 0, stream>>>(
                 W_gate.data_ptr<scalar_t>(),
                 expert_offset.data_ptr<int32_t>(),
                 dOut.data_ptr<scalar_t>(),

@@ -53,7 +53,7 @@ torch::Tensor bwd_grouped_gemm_up_proj_dW_kernel(
 torch::Tensor bwd_grouped_gemm_up_proj_dX_kernel(
     torch::Tensor W_gate,
     torch::Tensor expert_offset,
-    torch::Tensor dOut,
+    torch::Tensor dOut
 );
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
