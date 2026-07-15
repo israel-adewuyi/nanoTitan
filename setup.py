@@ -21,8 +21,8 @@ setup(
                 "csrc/kernels/combine_kernels.cu",
                 "csrc/kernels/backward_combine_kernel.cu",
                 "csrc/kernels/backward_pack_kernel.cu",
-                "csrc/kernels/bwd_grouped_gemm_up_proj_dW.cu",
-                "csrc/kernels/bwd_grouped_gemm_up_proj_dX.cu",
+                "csrc/kernels/bwd_grouped_gemm_dW.cu",
+                "csrc/kernels/bwd_grouped_gemm_dX.cu",
             ],
             include_dirs=[
                 str(ROOT / "csrc"),

@@ -45,12 +45,12 @@ torch::Tensor grouped_gemm_kernel(
     torch::Tensor expert_offset,
     torch::Tensor weights
 );
-torch::Tensor bwd_grouped_gemm_up_proj_dW_kernel(
+torch::Tensor bwd_grouped_gemm_dW_kernel(
     torch::Tensor X,
     torch::Tensor expert_offset,
     torch::Tensor dOut
 );
-torch::Tensor bwd_grouped_gemm_up_proj_dX_kernel(
+torch::Tensor bwd_grouped_gemm_dX_kernel(
     torch::Tensor W_gate,
     torch::Tensor expert_offset,
     torch::Tensor dOut
@@ -81,12 +81,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
     m.def("grouped_gemm_kernel", &grouped_gemm_kernel, "Kernel to run grouped expert fwd pass");
 
-    m.def("bwd_grouped_gemm_up_proj_dW_kernel",
-    &bwd_grouped_gemm_up_proj_dW_kernel,
+    m.def("bwd_grouped_gemm_dW_kernel",
+    &bwd_grouped_gemm_dW_kernel,
     "Kernel to compute derivatives w.r.t W_gate (up proj) in grouped gemm");
 
-    m.def("bwd_grouped_gemm_up_proj_dX_kernel",
-    &bwd_grouped_gemm_up_proj_dX_kernel,
+    m.def("bwd_grouped_gemm_dX_kernel",
+    &bwd_grouped_gemm_dX_kernel,
     "Kernel to compute derivatives w.r.t X (up proj) in grouped gemm");
 
 }

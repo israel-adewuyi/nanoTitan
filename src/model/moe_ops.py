@@ -17,6 +17,10 @@ def pack_tokens_fn(X, topk_weights, topk_experts, expert_offset_cpy):
     return PackTokensFN.apply(X, topk_weights, topk_experts, expert_offset_cpy)
 
 
+def grouped_gemm_fn(X, weight, expert_offset):
+    return GroupedGEMM_FN.apply(X, expert_offset, weight)
+
+
 class PackTokensFN(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -78,3 +82,22 @@ class CombineTokensFN(torch.autograd.Function):
         )
 
         return expert_output_grad, None, packed_topk_weights_grad, None, None
+
+
+class GroupedGEMM_FN(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, X, expert_offset, weight) -> torch.Tensor:
+        ctx.save_for_backward(X, expert_offset, weight)
+
+        return random_ext.grouped_gemm_kernel(X, expert_offset, weight)
+
+    @staticmethod
+    def backward(ctx, out_grad) -> tuple:
+        X, expert_offset, weight = ctx.saved_tensors
+        out_grad = out_grad.contiguous()
+
+        dX = random_ext.bwd_grouped_gemm_dX_kernel(weight, expert_offset, out_grad)
+
+        dW = random_ext.bwd_grouped_gemm_dW_kernel(X, expert_offset, out_grad)
+
+        return dX, None, dW

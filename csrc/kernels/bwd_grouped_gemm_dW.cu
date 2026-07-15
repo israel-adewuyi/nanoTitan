@@ -8,7 +8,7 @@
 #define BLOCK_M 16
 
 template <typename T>
-__global__ void bwd_grouped_gemm_up_proj_dW_cu(
+__global__ void bwd_grouped_gemm_dW_cu(
     const T* __restrict__ X,                     // [#assignments, d_model]
     const int32_t* __restrict__ expert_offset, // [#experts, ]
     const T* __restrict__ dOut,               // [#assignments, d_in]
@@ -40,7 +40,7 @@ __global__ void bwd_grouped_gemm_up_proj_dW_cu(
 }
 
 
-torch::Tensor bwd_grouped_gemm_up_proj_dW_kernel(
+torch::Tensor bwd_grouped_gemm_dW_kernel(
     torch::Tensor X,
     torch::Tensor expert_offset,
     torch::Tensor dOut
@@ -71,9 +71,9 @@ torch::Tensor bwd_grouped_gemm_up_proj_dW_kernel(
         at::ScalarType::Half,
         at::ScalarType::BFloat16,
         X.scalar_type(),
-        "bwd_grouped_kernel_up_proj_dW",
+        "bwd_grouped_kernel_dW",
         [&] {
-            bwd_grouped_gemm_up_proj_dW_cu<scalar_t><<<blocks, threads, 0, stream>>>(
+            bwd_grouped_gemm_dW_cu<scalar_t><<<blocks, threads, 0, stream>>>(
                 X.data_ptr<scalar_t>(),
                 expert_offset.data_ptr<int32_t>(),
                 dOut.data_ptr<scalar_t>(),

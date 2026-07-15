@@ -9,7 +9,7 @@
 #define MAX_TOKENS_PER_BLOCK 256
 
 template <typename T>
-__global__ void bwd_grouped_gemm_up_proj_dX_cu(
+__global__ void bwd_grouped_gemm_dX_cu(
     const T* __restrict__ W_gate,               // [#expert, hidden_dim, d_in]
     const int32_t* __restrict__ expert_offset, // [#experts, ]
     const T* __restrict__ dOut,               // [#assignments, d_in]
@@ -42,7 +42,7 @@ __global__ void bwd_grouped_gemm_up_proj_dX_cu(
 }
 
 
-torch::Tensor bwd_grouped_gemm_up_proj_dX_kernel(
+torch::Tensor bwd_grouped_gemm_dX_kernel(
     torch::Tensor W_gate,
     torch::Tensor expert_offset,
     torch::Tensor dOut
@@ -74,9 +74,9 @@ torch::Tensor bwd_grouped_gemm_up_proj_dX_kernel(
         at::ScalarType::Half,
         at::ScalarType::BFloat16,
         W_gate.scalar_type(),
-        "bwd_grouped_kernel_up_proj_dX",
+        "bwd_grouped_kernel_dX",
         [&] {
-            bwd_grouped_gemm_up_proj_dX_cu<scalar_t><<<blocks, threads, 0, stream>>>(
+            bwd_grouped_gemm_dX_cu<scalar_t><<<blocks, threads, 0, stream>>>(
                 W_gate.data_ptr<scalar_t>(),
                 expert_offset.data_ptr<int32_t>(),
                 dOut.data_ptr<scalar_t>(),

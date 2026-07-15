@@ -4,6 +4,7 @@ from jaxtyping import Float
 
 from src.config import ModelConfig
 from src.model.cuda_backend import CUDAMoEBackend
+from src.model.moe_ops import grouped_gemm_fn
 from src.model.torch_backend import TorchMoEBackend
 
 
@@ -74,16 +75,16 @@ class ExpertFFN(nn.Module):
         nn.init.normal_(self.W_val)
         nn.init.normal_(self.W_out)
 
-    def forward(
+    def _forward_torch(
         self,
         packed_X: Float[torch.Tensor, "num_assignments d_model"],
-        expert_offset,  # TODO: shape anotation
-    ) -> Float[torch.Tensor, "num_assignments d_model"]:
+        expert_offset: Float[torch.Tensor, "num_experts + 1"],
+    ):
         out = torch.empty_like(packed_X)
 
         for e in range(self.cfg.num_experts):
             start = expert_offset[e].item()
-            end = expert_offset[e + 1].item()  # TODO: Verify that expert offset is num_experts + 1
+            end = expert_offset[e + 1].item()
 
             expert_input = packed_X[start:end]
 
@@ -93,6 +94,28 @@ class ExpertFFN(nn.Module):
             out[start:end] = temp_out @ self.W_out[e]
 
         return out
+
+    def _forward_cuda(
+        self,
+        packed_X: Float[torch.Tensor, "num_assignments d_model"],
+        expert_offset: Float[torch.Tensor, "num_experts + 1"],
+    ):
+        gate_logits = grouped_gemm_fn(packed_X, self.W_gate, expert_offset)
+        value = grouped_gemm_fn(packed_X, self.W_val, expert_offset)
+
+        hidden = torch.nn.functional.silu(gate_logits) * value
+
+        return grouped_gemm_fn(hidden, self.W_out, expert_offset)
+
+    def forward(
+        self,
+        packed_X: Float[torch.Tensor, "num_assignments d_model"],
+        expert_offset: Float[torch.Tensor, "num_experts + 1"],
+    ) -> Float[torch.Tensor, "num_assignments d_model"]:
+        if self.cfg.moe_backend == "cuda":
+            return self._forward_cuda(packed_X, expert_offset)
+        elif self.cfg.moe_backend == "torch":
+            return self._forward_torch(packed_X, expert_offset)
 
     def parameter_count(self) -> int:
         return sum(param.numel() for param in self.parameters())

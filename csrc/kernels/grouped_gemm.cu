@@ -38,13 +38,12 @@ __global__ void grouped_gemm_cu(
     out[(start + local_row) * hidden_dim_B + out_col] = static_cast<T>(acc);
 }
 
-// Retrofitting this for up projection... should generalize much later on
+
 torch::Tensor grouped_gemm_kernel(
     torch::Tensor X, 
     torch::Tensor expert_offset,
     torch::Tensor weights
 ){
-    // TORCH_CHECK()//
     int assignments = X.size(0);
     int d_model = X.size(1);
     int num_experts = weights.size(0);
