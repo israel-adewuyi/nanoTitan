@@ -1,7 +1,11 @@
+from types import SimpleNamespace
+
 import pytest
 import torch
 
 import random_ext
+from src.model.feed_fwd import ExpertFFN
+from src.model.moe_ops import grouped_gemm_fn
 
 SUPPORTED_DTYPES = [
     pytest.param(torch.float32, id="float32"),
@@ -17,6 +21,12 @@ MOE_PROJECTION_SHAPES = [
     pytest.param(128, 512, id="up-projection"),
     pytest.param(512, 128, id="down-projection-w-out"),
 ]
+
+TOLERANCES = {
+    torch.float32: {"rtol": 1e-4, "atol": 1e-4},
+    torch.float16: {"rtol": 2e-2, "atol": 2e-2},
+    torch.bfloat16: {"rtol": 2e-2, "atol": 2e-2},
+}
 
 
 def torch_grouped_gemm(X, weights, offsets):
@@ -96,10 +106,75 @@ def test_grouped_gemm_backward_matches_moe_projection_autograd(
     out = torch_grouped_gemm(X, weights, offsets)
     out.backward(d_out)
 
-    dX = random_ext.bwd_grouped_gemm_up_proj_dX_kernel(weights.detach(), expert_offset, d_out)
-    dW = random_ext.bwd_grouped_gemm_up_proj_dW_kernel(X.detach(), expert_offset, d_out)
+    dX = random_ext.bwd_grouped_gemm_dX_kernel(weights.detach(), expert_offset, d_out)
+    dW = random_ext.bwd_grouped_gemm_dW_kernel(X.detach(), expert_offset, d_out)
 
     assert dX.shape == X.shape
     assert dW.shape == weights.shape
     torch.testing.assert_close(dX, X.grad, rtol=2e-2, atol=2e-2)
     torch.testing.assert_close(dW, weights.grad, rtol=2e-2, atol=2e-2)
+
+
+@pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
+@pytest.mark.parametrize(("input_features", "output_features"), MOE_PROJECTION_SHAPES)
+def test_grouped_gemm_autograd_wrapper_matches_torch(dtype, input_features, output_features):
+    offsets = [0, 3, 4, 8]
+    expert_offset = torch.tensor(offsets, dtype=torch.int32, device="cuda")
+
+    X_ref = torch.randn(8, input_features, dtype=dtype, device="cuda", requires_grad=True)
+    X_cuda = X_ref.detach().clone().requires_grad_(True)
+    weights_ref = torch.randn(
+        3, input_features, output_features, dtype=dtype, device="cuda", requires_grad=True
+    )
+    weights_cuda = weights_ref.detach().clone().requires_grad_(True)
+
+    expected = torch_grouped_gemm(X_ref, weights_ref, offsets)
+    actual = grouped_gemm_fn(X_cuda, weights_cuda, expert_offset)
+
+    torch.testing.assert_close(actual, expected, **TOLERANCES[dtype])
+
+    d_out = torch.randn(output_features, 8, dtype=dtype, device="cuda").T
+    expected.backward(d_out)
+    actual.backward(d_out)
+
+    torch.testing.assert_close(X_cuda.grad, X_ref.grad, **TOLERANCES[dtype])
+    torch.testing.assert_close(weights_cuda.grad, weights_ref.grad, **TOLERANCES[dtype])
+
+
+@pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
+def test_expert_ffn_cuda_matches_torch_forward_and_backward(dtype):
+    torch.manual_seed(0)
+    cfg_torch = SimpleNamespace(
+        num_experts=3,
+        d_model=8,
+        ffn_in=16,
+        dtype=dtype,
+        moe_backend="torch",
+    )
+    cfg_cuda = SimpleNamespace(**vars(cfg_torch))
+    cfg_cuda.moe_backend = "cuda"
+
+    expert_ref = ExpertFFN(cfg_torch).to("cuda")
+    expert_cuda = ExpertFFN(cfg_cuda).to("cuda")
+    expert_cuda.load_state_dict(expert_ref.state_dict())
+
+    offsets = torch.tensor([0, 3, 4, 8], dtype=torch.int32, device="cuda")
+    X_ref = torch.randn(8, cfg_torch.d_model, dtype=dtype, device="cuda", requires_grad=True)
+    X_cuda = X_ref.detach().clone().requires_grad_(True)
+
+    expected = expert_ref(X_ref, offsets)
+    actual = expert_cuda(X_cuda, offsets)
+
+    torch.testing.assert_close(actual, expected, **TOLERANCES[dtype])
+
+    d_out = torch.randn_like(expected)
+    expected.backward(d_out)
+    actual.backward(d_out)
+
+    torch.testing.assert_close(X_cuda.grad, X_ref.grad, **TOLERANCES[dtype])
+    for name in ("W_gate", "W_val", "W_out"):
+        torch.testing.assert_close(
+            getattr(expert_cuda, name).grad,
+            getattr(expert_ref, name).grad,
+            **TOLERANCES[dtype],
+        )
