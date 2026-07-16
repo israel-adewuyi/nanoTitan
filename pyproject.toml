@@ -12,7 +12,6 @@ dependencies = [
     "pytest>=9.0.3",
     "tensorboard>=2.20.0",
     "tiktoken>=0.12.0",
-    "torch==2.6.0",
 ]
 
 [dependency-groups]
@@ -24,8 +23,35 @@ dev = [
     "ruff>=0.12.0",
 ]
 
+[project.optional-dependencies]
+cpu = [
+    "torch==2.6.0",
+]
+
+cu124 = [
+    "torch==2.6.0",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cu124" },
+    ],
+]
+no-build-isolation-package = ["nanotitan"]
+
 [tool.uv.sources]
-torch = { index = "pytorch-cu124" }
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu124", extra = "cu124" },
+]
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu124"
@@ -58,6 +84,3 @@ addopts = "--strict-markers"
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
-
-[tool.uv]
-no-build-isolation-package = ["nanotitan"]
