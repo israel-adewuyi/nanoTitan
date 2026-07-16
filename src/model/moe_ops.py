@@ -2,7 +2,7 @@ from typing import Any
 
 import torch
 
-import random_ext
+from src.model.cuda_extension import get_cuda_extension
 
 
 def combine_tokens_fn(
@@ -30,6 +30,7 @@ class PackTokensFN(torch.autograd.Function):
         topk_experts,
         expert_offset_cpy,
     ) -> tuple:
+        random_ext = get_cuda_extension()
         packed_X, packed_tokenId, packed_expert, packed_topk_weights = (
             random_ext.pack_tokens_kernel(X, topk_weights, topk_experts, expert_offset_cpy)
         )
@@ -42,6 +43,7 @@ class PackTokensFN(torch.autograd.Function):
     def backward(
         ctx, packed_X_grad, packed_tokenId_grad, packed_expert_grad, packed_topk_weights_grad
     ) -> Any:
+        random_ext = get_cuda_extension()
         packed_tokenId, packed_expert, topk_experts = ctx.saved_tensors
 
         X_grad, topk_weights_grad = random_ext.pack_kernel_backward(
@@ -60,6 +62,7 @@ class CombineTokensFN(torch.autograd.Function):
     def forward(
         ctx, packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, hidden_dim
     ) -> torch.Tensor:
+        random_ext = get_cuda_extension()
         pool = random_ext.combine_tokens_kernel(
             packed_expert_outputs, packed_tokenId, packed_topk_weights, num_tokens, hidden_dim
         )
@@ -71,6 +74,7 @@ class CombineTokensFN(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, d_resid_stream) -> tuple:
+        random_ext = get_cuda_extension()
         packed_expert_outputs, packed_tokenId, packed_topk_weights = ctx.saved_tensors
 
         expert_output_grad, packed_topk_weights_grad = random_ext.combine_kernel_backward(
@@ -87,12 +91,14 @@ class CombineTokensFN(torch.autograd.Function):
 class GroupedGEMM_FN(torch.autograd.Function):
     @staticmethod
     def forward(ctx, X, expert_offset, weight) -> torch.Tensor:
+        random_ext = get_cuda_extension()
         ctx.save_for_backward(X, expert_offset, weight)
 
         return random_ext.grouped_gemm_kernel(X, expert_offset, weight)
 
     @staticmethod
     def backward(ctx, out_grad) -> tuple:
+        random_ext = get_cuda_extension()
         X, expert_offset, weight = ctx.saved_tensors
         out_grad = out_grad.contiguous()
 

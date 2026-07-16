@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from torch.profiler import record_function
 
-import random_ext
 from src.config import ModelConfig
+from src.model.cuda_extension import get_cuda_extension
 from src.model.moe_ops import combine_tokens_fn, pack_tokens_fn
 from src.model.utils import MoELayerStats
 
@@ -44,6 +44,9 @@ class CUDAMoEBackend:
 
         with record_function("moe/count_expert"):
             mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)
+
+            # Lazily import random_ext extension
+            random_ext = get_cuda_extension()
             expert_count = random_ext.count_expert_kernel(
                 topk_expert_idx.to(torch.int32), mask, self.cfg.num_experts, self.cfg.top_k
             )
