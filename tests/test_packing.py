@@ -1,9 +1,12 @@
 import pytest
 import torch
 
-import random_ext
+pytestmark = pytest.mark.cuda
 
-# Will extend to include pack and combine when combine is fully implemented.
+if not torch.cuda.is_available():
+    pytest.skip("CUDA unavailable", allow_module_level=True)
+
+random_ext = pytest.importorskip("random_ext")
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])

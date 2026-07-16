@@ -49,6 +49,12 @@ ignore = ["F722", "F821", "E501"]
 [tool.ruff.lint.isort]
 known-first-party = ["random_ext"]
 
+[tool.pytest.ini_options]
+markers = [
+    "cuda: requires CUDA and the compiled CUDA extension",
+]
+addopts = "--strict-markers"
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"

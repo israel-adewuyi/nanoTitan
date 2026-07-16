@@ -3,9 +3,17 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-import random_ext
-from src.model.feed_fwd import ExpertFFN
-from src.model.moe_ops import grouped_gemm_fn
+pytestmark = pytest.mark.cuda
+
+if not torch.cuda.is_available():
+    pytest.skip("CUDA unavailable", allow_module_level=True)
+
+random_ext = pytest.importorskip("random_ext")
+feed_fwd = pytest.importorskip("src.model.feed_fwd")
+moe_ops = pytest.importorskip("src.model.moe_ops")
+
+ExpertFFN = feed_fwd.ExpertFFN
+grouped_gemm_fn = moe_ops.grouped_gemm_fn
 
 SUPPORTED_DTYPES = [
     pytest.param(torch.float32, id="float32"),

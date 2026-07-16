@@ -48,7 +48,7 @@ def test_moe_output_shape():
 
     moe = MoE(cfg).to(device)
 
-    y, tokens_per_expert = moe(x)
+    y, _ = moe(x)
 
     assert y.shape == x.shape
 

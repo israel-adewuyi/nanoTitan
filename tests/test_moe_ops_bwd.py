@@ -1,7 +1,15 @@
 import pytest
 import torch
 
-from src.model.moe_ops import combine_tokens_fn, pack_tokens_fn
+pytestmark = pytest.mark.cuda
+
+if not torch.cuda.is_available():
+    pytest.skip("CUDA unavailable", allow_module_level=True)
+
+moe_ops = pytest.importorskip("src.model.moe_ops")
+
+combine_tokens_fn = moe_ops.combine_tokens_fn
+pack_tokens_fn = moe_ops.pack_tokens_fn
 
 TOLERANCES = {
     torch.float32: {"rtol": 1e-5, "atol": 1e-6},

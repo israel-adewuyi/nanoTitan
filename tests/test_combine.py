@@ -1,7 +1,12 @@
 import pytest
 import torch
 
-import random_ext
+pytestmark = pytest.mark.cuda
+
+if not torch.cuda.is_available():
+    pytest.skip("CUDA unavailable", allow_module_level=True)
+
+random_ext = pytest.importorskip("random_ext")
 
 
 def test_combine_top1():
