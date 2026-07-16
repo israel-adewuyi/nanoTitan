@@ -46,11 +46,13 @@ def test_pack_tokens_correctness(dtype):
         ([0, 4, 6, 8]), device="cuda", dtype=torch.int32
     )  # TODO: I should call count_expert kernel and do the prefix sum for this. Leave for now.
 
-    packed_X, packed_tokenId, packed_expert, packed_topk_weights = nanotitan_cuda.pack_tokens_kernel(
-        X,
-        topk_weights,
-        topk_experts,
-        expert_offset_cpy,
+    packed_X, packed_tokenId, packed_expert, packed_topk_weights = (
+        nanotitan_cuda.pack_tokens_kernel(
+            X,
+            topk_weights,
+            topk_experts,
+            expert_offset_cpy,
+        )
     )
 
     torch.cuda.synchronize()
