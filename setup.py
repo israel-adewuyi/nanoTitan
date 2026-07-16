@@ -9,7 +9,7 @@ setup(
     name="nanotitan",
     ext_modules=[
         CUDAExtension(
-            name="random_ext",
+            name="nanotitan_cuda",
             sources=[
                 "csrc/bindings.cpp",
                 "csrc/random.cpp",

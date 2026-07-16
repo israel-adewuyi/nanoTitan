@@ -8,7 +8,7 @@ pytestmark = pytest.mark.cuda
 if not torch.cuda.is_available():
     pytest.skip("CUDA unavailable", allow_module_level=True)
 
-random_ext = pytest.importorskip("random_ext")
+nanotitan_cuda = pytest.importorskip("nanotitan_cuda")
 feed_fwd = pytest.importorskip("src.model.feed_fwd")
 moe_ops = pytest.importorskip("src.model.moe_ops")
 
@@ -54,7 +54,7 @@ def test_grouped_gemm_kernel_small_smoke(dtype, shape):
         device=X.device,
     )
 
-    out = random_ext.grouped_gemm_kernel(
+    out = nanotitan_cuda.grouped_gemm_kernel(
         X,
         expert_offset,
         weights,
@@ -83,7 +83,7 @@ def test_grouped_gemm_forward_matches_moe_projection(dtype, input_features, outp
     X = torch.randn(assignments, input_features, dtype=dtype, device="cuda")
     weights = torch.randn(len(counts), input_features, output_features, dtype=dtype, device="cuda")
 
-    actual = random_ext.grouped_gemm_kernel(X, expert_offset, weights)
+    actual = nanotitan_cuda.grouped_gemm_kernel(X, expert_offset, weights)
     expected = torch_grouped_gemm(X, weights, offsets)
 
     assert actual.shape == (assignments, output_features)
@@ -114,8 +114,8 @@ def test_grouped_gemm_backward_matches_moe_projection_autograd(
     out = torch_grouped_gemm(X, weights, offsets)
     out.backward(d_out)
 
-    dX = random_ext.bwd_grouped_gemm_dX_kernel(weights.detach(), expert_offset, d_out)
-    dW = random_ext.bwd_grouped_gemm_dW_kernel(X.detach(), expert_offset, d_out)
+    dX = nanotitan_cuda.bwd_grouped_gemm_dX_kernel(weights.detach(), expert_offset, d_out)
+    dW = nanotitan_cuda.bwd_grouped_gemm_dW_kernel(X.detach(), expert_offset, d_out)
 
     assert dX.shape == X.shape
     assert dW.shape == weights.shape

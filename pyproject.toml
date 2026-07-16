@@ -73,7 +73,7 @@ select = [
 ignore = ["F722", "F821", "E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["random_ext"]
+known-first-party = ["nanotitan_cuda"]
 
 [tool.pytest.ini_options]
 markers = [

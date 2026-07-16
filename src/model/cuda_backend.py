@@ -45,9 +45,9 @@ class CUDAMoEBackend:
         with record_function("moe/count_expert"):
             mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)
 
-            # Lazily import random_ext extension
-            random_ext = get_cuda_extension()
-            expert_count = random_ext.count_expert_kernel(
+            # Lazily import cuda extension
+            nanotitan_cuda = get_cuda_extension()
+            expert_count = nanotitan_cuda.count_expert_kernel(
                 topk_expert_idx.to(torch.int32), mask, self.cfg.num_experts, self.cfg.top_k
             )
 

@@ -7,7 +7,7 @@ pytestmark = pytest.mark.cuda
 if not torch.cuda.is_available():
     pytest.skip("CUDA unavailable", allow_module_level=True)
 
-random_ext = pytest.importorskip("random_ext")
+nanotitan_cuda = pytest.importorskip("nanotitan_cuda")
 
 TOLERANCES = {
     torch.float32: {"rtol": 1e-4, "atol": 1e-4},
@@ -26,9 +26,9 @@ def test_gemm_kernel_small(dtype, implementation, shape):
     B = torch.randn((K, N), dtype=dtype, device=A.device)
 
     if implementation is None:
-        C = random_ext.gemm_kernel(A, B)
+        C = nanotitan_cuda.gemm_kernel(A, B)
     else:
-        C = random_ext.gemm_kernel(A, B, implementation)
+        C = nanotitan_cuda.gemm_kernel(A, B, implementation)
 
     torch.cuda.synchronize()
 
@@ -41,7 +41,7 @@ def test_naive_gemm_kernel_wrapper():
     A = torch.randn((10, 30), device="cuda")
     B = torch.randn((30, 20), device=A.device)
 
-    C = random_ext.naive_gemm_kernel(A, B)
+    C = nanotitan_cuda.naive_gemm_kernel(A, B)
 
     torch.testing.assert_close(C, A @ B, rtol=1e-5, atol=1e-6)
 
@@ -51,8 +51,8 @@ def test_tiled_gemm_equals_naive_gemm_kernel(dtype):
     A = torch.randn((10, 30), dtype=dtype, device="cuda")
     B = torch.randn((30, 20), dtype=dtype, device=A.device)
 
-    naive_C = random_ext.naive_gemm_kernel(A, B)
-    tiled_C = random_ext.tiled_gemm_kernel(A, B)
+    naive_C = nanotitan_cuda.naive_gemm_kernel(A, B)
+    tiled_C = nanotitan_cuda.tiled_gemm_kernel(A, B)
 
     torch.testing.assert_close(naive_C, tiled_C, rtol=1e-5, atol=1e-6)
 
@@ -62,4 +62,4 @@ def test_tiled_gemm_kernel_rejects_unknown_implementation():
     B = torch.randn((30, 20), device=A.device)
 
     with pytest.raises(RuntimeError, match="implementation must be either 'tiled' or 'naive'"):
-        random_ext.gemm_kernel(A, B, "wat")
+        nanotitan_cuda.gemm_kernel(A, B, "wat")

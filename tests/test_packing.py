@@ -6,7 +6,7 @@ pytestmark = pytest.mark.cuda
 if not torch.cuda.is_available():
     pytest.skip("CUDA unavailable", allow_module_level=True)
 
-random_ext = pytest.importorskip("random_ext")
+nanotitan_cuda = pytest.importorskip("nanotitan_cuda")
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
@@ -46,7 +46,7 @@ def test_pack_tokens_correctness(dtype):
         ([0, 4, 6, 8]), device="cuda", dtype=torch.int32
     )  # TODO: I should call count_expert kernel and do the prefix sum for this. Leave for now.
 
-    packed_X, packed_tokenId, packed_expert, packed_topk_weights = random_ext.pack_tokens_kernel(
+    packed_X, packed_tokenId, packed_expert, packed_topk_weights = nanotitan_cuda.pack_tokens_kernel(
         X,
         topk_weights,
         topk_experts,

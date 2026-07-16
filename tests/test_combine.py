@@ -6,7 +6,7 @@ pytestmark = pytest.mark.cuda
 if not torch.cuda.is_available():
     pytest.skip("CUDA unavailable", allow_module_level=True)
 
-random_ext = pytest.importorskip("random_ext")
+nanotitan_cuda = pytest.importorskip("nanotitan_cuda")
 
 
 def test_combine_top1():
@@ -23,7 +23,7 @@ def test_combine_top1():
     packed_topk_weights = torch.tensor([1.0, 1.0, 1.0], device=expert_outputs.device)
     resid_stream = torch.zeros_like(expert_outputs)
 
-    resid_stream = random_ext.combine_tokens_kernel(
+    resid_stream = nanotitan_cuda.combine_tokens_kernel(
         expert_outputs, packed_tokenId, packed_topk_weights, 3, 2
     ).to(expert_outputs.dtype)
 
@@ -72,7 +72,7 @@ def test_combine_top2(dtype):
     )
     resid_stream = torch.zeros((3, 2), device=expert_outputs.device, dtype=torch.float32)
 
-    resid_stream = random_ext.combine_tokens_kernel(
+    resid_stream = nanotitan_cuda.combine_tokens_kernel(
         expert_outputs, packed_tokenId, packed_topk_weights, 3, 2
     ).to(expert_outputs.dtype)
 
