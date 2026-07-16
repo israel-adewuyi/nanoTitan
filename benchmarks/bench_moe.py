@@ -65,13 +65,13 @@ def main():
         raise SystemExit("CUDA is not available in this PyTorch environment.")
 
     try:
-        import random_ext  # noqa: F401
+        import nanotitan_cuda  # noqa: F401
     except ModuleNotFoundError as exc:
         if args.backend in ("cuda", "both"):
             raise SystemExit(
-                "random_ext is not installed; build/install it before CUDA runs."
+                "nanotitan_cuda is not installed; build/install it before CUDA runs."
             ) from exc
-        sys.modules["random_ext"] = types.SimpleNamespace()
+        sys.modules["nanotitan_cuda"] = types.SimpleNamespace()
 
     from src.model.feed_fwd import MoE
 

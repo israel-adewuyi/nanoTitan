@@ -2,7 +2,7 @@ import argparse
 
 import torch
 
-import random_ext
+import nanotitan_cuda
 
 
 def make_inputs(tokens, hidden_dim, top_k, num_experts, device, dtype):
@@ -39,7 +39,7 @@ def run_pack(
     topk_experts,
     expert_offsets,
 ):
-    return random_ext.pack_tokens_kernel(
+    return nanotitan_cuda.pack_tokens_kernel(
         X,
         topk_weights,
         topk_experts,

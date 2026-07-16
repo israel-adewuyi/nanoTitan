@@ -23,11 +23,11 @@ def torch_combine(expert_out, token_ids, weights, tokens, hidden_dim):
 
 
 def cuda_combine(expert_out, token_ids, weights, tokens, hidden_dim):
-    import random_ext
+    import nanotitan_cuda
 
-    return random_ext.combine_tokens_kernel(expert_out, token_ids, weights, tokens, hidden_dim).to(
-        expert_out.dtype
-    )
+    return nanotitan_cuda.combine_tokens_kernel(
+        expert_out, token_ids, weights, tokens, hidden_dim
+    ).to(expert_out.dtype)
 
 
 def time_ms(fn, args, warmup, iters):
@@ -63,10 +63,10 @@ def main():
 
     if args.backend in ("cuda", "both"):
         try:
-            import random_ext  # noqa: F401
+            import nanotitan_cuda  # noqa: F401
         except ModuleNotFoundError as exc:
             raise SystemExit(
-                "random_ext is not installed; build/install it before CUDA runs."
+                "nanotitan_cuda is not installed; build/install it before CUDA runs."
             ) from exc
 
     torch.cuda.set_device(args.device)

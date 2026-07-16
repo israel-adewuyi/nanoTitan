@@ -2,7 +2,7 @@ import argparse
 
 import torch
 
-import random_ext
+import nanotitan_cuda
 
 
 def bench_copy_scalar(
@@ -14,7 +14,7 @@ def bench_copy_scalar(
 
     # warmup
     for _ in range(warmup):
-        random_ext.copy_scalar(src, dst, src.numel())
+        nanotitan_cuda.copy_scalar(src, dst, src.numel())
 
     torch.cuda.synchronize()
 
@@ -23,7 +23,7 @@ def bench_copy_scalar(
 
     start.record()
     for _ in range(iters):
-        random_ext.copy_scalar(src, dst, src.numel())
+        nanotitan_cuda.copy_scalar(src, dst, src.numel())
     end.record()
 
     torch.cuda.synchronize()
@@ -58,7 +58,7 @@ def bench_copy_vector(
 
     # warmup
     for _ in range(warmup):
-        random_ext.copy_vector(src, dst)
+        nanotitan_cuda.copy_vector(src, dst)
 
     torch.cuda.synchronize()
 
@@ -67,7 +67,7 @@ def bench_copy_vector(
 
     start.record()
     for _ in range(iters):
-        random_ext.copy_vector(src, dst)
+        nanotitan_cuda.copy_vector(src, dst)
     end.record()
 
     torch.cuda.synchronize()
@@ -102,7 +102,7 @@ def bench_peer_copy_scalar(dtype, numel, iters=100, warmup=20):
 
     # warmup
     for _ in range(warmup):
-        random_ext.peer_copy_scalar(src, src_device, dest, dest_device, count)
+        nanotitan_cuda.peer_copy_scalar(src, src_device, dest, dest_device, count)
 
     torch.cuda.synchronize()
 
@@ -111,7 +111,7 @@ def bench_peer_copy_scalar(dtype, numel, iters=100, warmup=20):
 
     start.record()
     for _ in range(iters):
-        random_ext.peer_copy_scalar(src, src_device, dest, dest_device, count)
+        nanotitan_cuda.peer_copy_scalar(src, src_device, dest, dest_device, count)
     end.record()
 
     torch.cuda.synchronize()
