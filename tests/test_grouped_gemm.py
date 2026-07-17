@@ -124,14 +124,6 @@ def test_grouped_gemm_kernel_big_smoke(dtype, shape):
         atol=2e-2,
     )
 
-    # expected = torch.empty_like(out)
-    # for expert_id in range(num_experts):
-    #     start = expert_offset[expert_id].item()
-    #     end = expert_offset[expert_id + 1].item()
-    #     expected[start:end] = X[start:end] @ weights[expert_id]
-
-    # torch.testing.assert_close(out, expected, rtol=2e-2, atol=2e-2)
-
 
 @pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
 @pytest.mark.parametrize(("input_features", "output_features"), MOE_PROJECTION_SHAPES)
