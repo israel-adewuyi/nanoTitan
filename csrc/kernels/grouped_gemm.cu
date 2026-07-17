@@ -56,7 +56,8 @@ torch::Tensor grouped_gemm_kernel(
 
     int max_tokens_per_expert = 0;
     for(int i = 0; i < num_experts; i++){
-        max_tokens_per_expert = max(0, (expert_offset[i] - expert_offset[i + 1]));
+        int tokens_for_expert = expert_offset[i + 1].item<int>() - expert_offset[i].item<int>();
+        max_tokens_per_expert = std::max(max_tokens_per_expert, tokens_for_expert);
     }
 
     dim3 threads(BLOCK_M, BLOCK_N);
