@@ -63,10 +63,15 @@ torch::Tensor bwd_grouped_gemm_dX_kernel(
     c10::cuda::CUDAGuard guard(W_gate.device());
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
+    int max_tokens_per_expert = 0;
+    for(int i = 0; i < num_experts; i++){
+        max_tokens_per_expert = max(0, (expert_offset[i] - expert_offset[i + 1]));
+    }
+
     dim3 threads(BLOCK_N, BLOCK_M);
     dim3 blocks(
         ((hidden_dim + BLOCK_N - 1) / BLOCK_N),
-        ((MAX_TOKENS_PER_BLOCK + BLOCK_M - 1) / BLOCK_M),
+        ((max_tokens_per_expert + BLOCK_M - 1) / BLOCK_M),
         num_experts 
     );
 

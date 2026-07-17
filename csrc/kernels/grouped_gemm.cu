@@ -54,10 +54,15 @@ torch::Tensor grouped_gemm_kernel(
         X.options()
     );
 
+    int max_tokens_per_expert = 0;
+    for(int i = 0; i < num_experts; i++){
+        max_tokens_per_expert = max(0, (expert_offset[i] - expert_offset[i + 1]));
+    }
+
     dim3 threads(BLOCK_M, BLOCK_N);
     dim3 blocks(
         ((d_ffn_in + BLOCK_M - 1) / BLOCK_M),
-        MAX_TOKEN_BLOCKS,
+        ((max_tokens_per_expert + BLOCK_N - 1) / BLOCK_N),
         num_experts
     );
 
