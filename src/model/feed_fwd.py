@@ -71,9 +71,9 @@ class ExpertFFN(nn.Module):
         self._reset_parameters()
 
     def _reset_parameters(self):
-        nn.init.normal_(self.W_gate)
-        nn.init.normal_(self.W_val)
-        nn.init.normal_(self.W_out)
+        nn.init.kaiming_normal_(self.W_gate, mode="fan_in", nonlinearity="relu")
+        nn.init.kaiming_normal_(self.W_val, mode="fan_in", nonlinearity="relu")
+        nn.init.kaiming_normal_(self.W_out, mode="fan_in", nonlinearity="relu")
 
     def _forward_torch(
         self,
