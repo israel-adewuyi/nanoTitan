@@ -82,7 +82,9 @@ def test_grouped_gemm_kernel_small_smoke(dtype, shape):
 
 
 @pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
-@pytest.mark.parametrize("shape", [(16, 4, 1024, 16384), (15, 3, 8192, 2048), (16, 3, 16384, 16384)])
+@pytest.mark.parametrize(
+    "shape", [(16, 4, 1024, 16384), (15, 3, 8192, 2048), (16, 3, 16384, 16384)]
+)
 def test_grouped_gemm_kernel_big_smoke(dtype, shape):
     assignments, num_experts, d_model, d_ffn_in = shape
 
@@ -113,10 +115,7 @@ def test_grouped_gemm_kernel_big_smoke(dtype, shape):
         start = expert_offset[expert_id].item()
         end = expert_offset[expert_id + 1].item()
 
-        expected_fp32[start:end] = (
-            X[start:end].float()
-            @ weights[expert_id].float()
-        )
+        expected_fp32[start:end] = X[start:end].float() @ weights[expert_id].float()
 
     torch.testing.assert_close(
         out.float(),
