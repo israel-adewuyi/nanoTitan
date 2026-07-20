@@ -53,6 +53,8 @@ class RuntimeConfig(BaseModel):
 
     dp_size: int = 1
     pp_size: int = 1
+    ep_size: int = 1
+    num_expert: PositiveInt = 1
 
 
 class ProfilerConfig(BaseModel):
@@ -132,6 +134,23 @@ class AppConfig(BaseModel):
     hardware: HardwareConfig = Field(default_factory=HardwareConfig)
 
     track_backward_time: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def extend_runtime_args(cls, config: object) -> object:
+        if not isinstance(config, dict):
+            return config
+
+        model_config = config.get("model")
+        runtime_config = config.get("runtime")
+        if not isinstance(model_config, dict) or not isinstance(runtime_config, dict):
+            return config
+
+        extended_config = config.copy()
+        extended_runtime_config = runtime_config.copy()
+        extended_runtime_config["num_expert"] = model_config.get("num_experts")
+        extended_config["runtime"] = extended_runtime_config
+        return extended_config
 
 
 def resolve_config_path(path: str | Path) -> Path:
