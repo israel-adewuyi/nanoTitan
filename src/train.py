@@ -86,7 +86,7 @@ def main() -> None:
     cfg = load_run_config(args.config)
     init_distributed()
     world_size = get_world_size()
-    assert world_size == cfg.runtime.dp_size * cfg.runtime.pp_size
+    assert world_size == cfg.runtime.dp_size * cfg.runtime.pp_size * cfg.runtime.ep_size
     assert cfg.model.n_layers % cfg.runtime.pp_size == 0
     assert cfg.trainer.per_device_batch_size % cfg.runtime.num_microbatches == 0
 

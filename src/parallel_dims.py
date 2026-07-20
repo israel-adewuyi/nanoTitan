@@ -16,7 +16,7 @@ class ParallelDims:
         self.dp_size = config.dp_size
         self.pp_size = config.pp_size
         self.ep_size = config.ep_size
-        self.num_experts = config.num_expert  # TODO: In config, post
+        self.num_experts = config.num_expert
 
         assert self.pp_size * self.dp_size * self.ep_size == self.world_size
         assert self.num_experts % self.ep_size == 0, (
@@ -30,7 +30,10 @@ class ParallelDims:
         self.is_pp_first_stage = self.pp_rank == 0
         self.is_pp_last_stage = self.pp_rank == self.pp_size - 1
 
-        # self.ep_group_ranks = [((self.dp_rank * self.pp_size) + self.pp_rank) * self.ep_size + ep for ep in range(self.ep_size)]
+        self.ep_group_ranks = [
+            ((self.dp_rank * self.pp_size) + self.pp_rank) * self.ep_size + ep
+            for ep in range(self.ep_size)
+        ]
         self.ep_group = None
         for dp in range(self.dp_size):
             for pp in range(self.pp_size):
@@ -57,6 +60,11 @@ class ParallelDims:
                 if self.dp_rank == dp and self.ep_rank == ep:
                     self.pp_group = group
 
+        self.shared_dp_group_ranks = [
+            ((dp * self.pp_size) + self.pp_rank) * self.ep_size + ep
+            for dp in range(self.dp_size)
+            for ep in range(self.ep_size)
+        ]
         self.shared_dp_group = None
         for pp in range(self.pp_size):
             ranks = [
@@ -69,6 +77,10 @@ class ParallelDims:
             if self.pp_rank == pp:
                 self.shared_dp_group = group
 
+        self.expert_dp_group_ranks = [
+            ((dp * self.pp_size) + self.pp_rank) * self.ep_size + self.ep_rank
+            for dp in range(self.dp_size)
+        ]
         self.expert_dp_group = None
         for pp in range(self.pp_size):
             for ep in range(self.ep_size):
@@ -82,6 +94,12 @@ class ParallelDims:
 
         self.prev_pp_rank = -1 if self.is_pp_first_stage else self.global_rank - self.ep_size
         self.next_pp_rank = -1 if self.is_pp_last_stage else self.global_rank + self.ep_size
+
+    def __repr__(self):
+        return f"""ParallelDim(ep_group_rank={self.ep_group_ranks}\n
+            pp_group_ranks={self.pp_group_ranks}\n
+            shared_dp_group_rank={self.shared_dp_group_ranks}\n
+            self.expert_dp_group_rank={self.expert_dp_group_ranks})"""
 
 
 def get_parallel_dims(config: RuntimeConfig):
