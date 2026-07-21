@@ -9,10 +9,7 @@ from jaxtyping import Float
 
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
-from src.model.utils import MoELayerStats
-from src.model_utils import ModelShardSpec
-
-# TODO: model_utils vs model.utils.. this isn't clean
+from src.model.utils import ModelShardSpec, MoELayerStats
 
 
 def _parameter_count(module: nn.Module) -> int:
@@ -188,12 +185,12 @@ class MultiHeadAttention(nn.Module):
 class TransformerLayer(nn.Module):
     """A transformer layer"""
 
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
         super().__init__()
         self.cfg = cfg
 
         self.attn = MultiHeadAttention(cfg)
-        self.ffn = MoE(cfg)
+        self.ffn = MoE(cfg, spec)
         self.attn_norm = LayerNorm(cfg)
         self.ffn_norm = LayerNorm(cfg)
 
@@ -225,7 +222,7 @@ class NanoTitanModel(nn.Module):
             self.blocks.append(EmbeddingBlock(cfg))
 
         for _ in range(self.spec.layer_start, self.spec.layer_end):
-            self.blocks.append(TransformerLayer(cfg))
+            self.blocks.append(TransformerLayer(cfg, spec))
 
         if self.spec.has_unembed_head:
             self.blocks.append(Unembed(self.cfg))

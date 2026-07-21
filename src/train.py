@@ -10,7 +10,7 @@ from src.data.dataset import PackedTokenDataset
 from src.dist_env import cleanup, get_world_size, init_distributed
 from src.metrics import HistogramMetric, MetricsLogger, ScalarMetric
 from src.model.model import NanoTitanModel
-from src.model_utils import get_model_shard_specs
+from src.model.utils import get_model_shard_specs
 from src.optim import setup_optimizer
 from src.parallel import (
     DataParallel,

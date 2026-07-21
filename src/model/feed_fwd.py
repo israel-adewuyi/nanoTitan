@@ -6,6 +6,7 @@ from src.config import ModelConfig
 from src.model.cuda_backend import CUDAMoEBackend
 from src.model.moe_ops import grouped_gemm_fn
 from src.model.torch_backend import TorchMoEBackend
+from src.model.utils import ModelShardSpec
 
 
 class FFN(nn.Module):
@@ -38,14 +39,15 @@ class FFN(nn.Module):
 class ExpertFFN(nn.Module):
     """Feedforward network implementation"""
 
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
         super().__init__()
         self.cfg = cfg
+        self.spec = spec
 
         # SwiGLU uses two parallel input projections
         self.W_gate = nn.Parameter(
             torch.empty(
-                cfg.num_experts,
+                spec.per_rank_expert,
                 cfg.d_model,
                 cfg.ffn_in,
                 dtype=cfg.dtype,
@@ -53,7 +55,7 @@ class ExpertFFN(nn.Module):
         )
         self.W_val = nn.Parameter(
             torch.empty(
-                cfg.num_experts,
+                spec.per_rank_expert,
                 cfg.d_model,
                 cfg.ffn_in,
                 dtype=cfg.dtype,
@@ -61,7 +63,7 @@ class ExpertFFN(nn.Module):
         )
         self.W_out = nn.Parameter(
             torch.empty(
-                cfg.num_experts,
+                spec.per_rank_expert,
                 cfg.ffn_in,
                 cfg.d_model,
                 dtype=cfg.dtype,
@@ -82,7 +84,7 @@ class ExpertFFN(nn.Module):
     ):
         out = torch.empty_like(packed_X)
 
-        for e in range(self.cfg.num_experts):
+        for e in range(self.cfg.num_experts):  # TODO: torch backend not compatible with dist MoE
             start = expert_offset[e].item()
             end = expert_offset[e + 1].item()
 
@@ -126,10 +128,10 @@ class MoE(nn.Module):
     A Mixture of Experts layer
     """
 
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
         super().__init__()
         self.cfg = cfg
-        self.experts = ExpertFFN(cfg)
+        self.experts = ExpertFFN(cfg, spec)
         self.router = nn.Linear(
             self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.moe_router_dtype
         )

@@ -4,7 +4,7 @@ import torch
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
 from src.model.model import NanoTitanModel
-from src.model_utils import ModelShardSpec
+from src.model.utils import ModelShardSpec
 from src.utils import resolve_dtype
 
 
