@@ -27,6 +27,19 @@ def make_test_config(d_model=8, num_experts=4, top_k=2, moe_backend="torch"):
     return cfg
 
 
+def make_test_spec(cfg, layer_end=None):
+    return ModelShardSpec(
+        layer_start=0,
+        layer_end=cfg.n_layers if layer_end is None else layer_end,
+        has_token_embed=False,
+        has_pos_embed=False,
+        has_unembed_head=False,
+        per_rank_expert=cfg.num_experts,
+        start_expert_id=0,
+        end_expert_id=cfg.num_experts,
+    )
+
+
 def test_moe_output_shape():
     if torch.cuda.is_available():
         cfg = make_test_config(
@@ -46,7 +59,7 @@ def test_moe_output_shape():
         device = "cpu"
         x = torch.randn(2, 4, 8, device=device)
 
-    moe = MoE(cfg).to(device)
+    moe = MoE(cfg, make_test_spec(cfg)).to(device)
 
     y, _ = moe(x)
 
@@ -57,13 +70,7 @@ def test_moe_output_shape():
 def test_model_can_return_moe_stats():
     cfg = make_test_config()
 
-    spec = ModelShardSpec(
-        layer_start=0,
-        layer_end=2,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-    )
+    spec = make_test_spec(cfg, layer_end=2)
 
     model = NanoTitanModel(cfg, spec)
     input_ids = torch.zeros((2, cfg.max_seq_len), dtype=torch.long)
@@ -78,13 +85,7 @@ def test_model_can_return_moe_stats():
 
 def test_model_active_parameter_count_uses_top_k_experts():
     cfg = make_test_config()
-    spec = ModelShardSpec(
-        layer_start=0,
-        layer_end=cfg.n_layers,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-    )
+    spec = make_test_spec(cfg)
 
     model = NanoTitanModel(cfg, spec)
 

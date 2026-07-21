@@ -3,6 +3,8 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+from src.model.utils import ModelShardSpec
+
 pytestmark = pytest.mark.cuda
 
 if not torch.cuda.is_available():
@@ -218,9 +220,19 @@ def test_expert_ffn_cuda_matches_torch_forward_and_backward(dtype):
     )
     cfg_cuda = SimpleNamespace(**vars(cfg_torch))
     cfg_cuda.moe_backend = "cuda"
+    spec = ModelShardSpec(
+        layer_start=0,
+        layer_end=1,
+        has_token_embed=False,
+        has_pos_embed=False,
+        has_unembed_head=False,
+        per_rank_expert=cfg_torch.num_experts,
+        start_expert_id=0,
+        end_expert_id=cfg_torch.num_experts,
+    )
 
-    expert_ref = ExpertFFN(cfg_torch).to("cuda")
-    expert_cuda = ExpertFFN(cfg_cuda).to("cuda")
+    expert_ref = ExpertFFN(cfg_torch, spec).to("cuda")
+    expert_cuda = ExpertFFN(cfg_cuda, spec).to("cuda")
     expert_cuda.load_state_dict(expert_ref.state_dict())
 
     offsets = torch.tensor([0, 3, 4, 8], dtype=torch.int32, device="cuda")
