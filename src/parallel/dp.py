@@ -83,8 +83,8 @@ class DataParallel:
             sampler=DistributedSampler(
                 dataset=train_dataset,
                 shuffle=True,
-                num_replicas=self.dims.dp_size,
-                rank=self.dims.dp_rank,
+                num_replicas=self.dims.data_world_size,
+                rank=self.dims.data_rank,
             ),
             num_workers=self.cfg.data.num_workers,
             pin_memory=True,

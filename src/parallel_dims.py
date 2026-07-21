@@ -27,6 +27,9 @@ class ParallelDims:
         self.pp_rank = (self.global_rank // self.ep_size) % self.pp_size
         self.ep_rank = self.global_rank % self.ep_size
 
+        self.data_world_size = self.dp_size * self.ep_size
+        self.data_rank = self.dp_rank * self.ep_size + self.ep_rank
+
         self.is_pp_first_stage = self.pp_rank == 0
         self.is_pp_last_stage = self.pp_rank == self.pp_size - 1
 

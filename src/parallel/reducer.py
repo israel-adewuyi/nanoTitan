@@ -41,50 +41,48 @@ class ReducerV1:
         2. All parameters are used.
         3. The same dtype and number of bytes per param element for all parameters
         """
-
         self.buckets = []
-        # Map parameters to bucket via id
-        bucket_id = 0
         self.param_to_bucket = {}
-
-        # Map parameters to segments of the bucket's buffer. This makes my life easier after AllReduce
-        buffer_len = 0
         self.param_to_offset = {}
 
-        # first bucket
-        bucket = {"size": 0, "params": [], "work": None}
+        active_bucket = {}
 
         for param in reversed(self.params):
             # get the number of bytes the param occupies in memory
             param_bytes = param.numel() * param.element_size()
+            key = param.dtype
 
-            # if param fit's into the existing bucket, put it there, track bucket id and segment length
-            if param_bytes + bucket["size"] <= self.bucket_size:
-                bucket["params"].append(param)
-                bucket["size"] += param_bytes
-                self.param_to_bucket[param] = bucket_id
-                self.param_to_offset[param] = (buffer_len, buffer_len + param.numel())
-                buffer_len += param.numel()
-            else:
-                # else save the current bucket along with it's initialized buffer and ready count
-                total_numel = bucket["size"] // param.element_size()
-                bucket["buffer"] = torch.empty(total_numel, device=param.device)
-                bucket["ready_count"] = 0
+            entry = active_bucket[key]
+
+            if entry is None or entry[1]["size_bytes"] + param_bytes >= self.bucket_size:
+                bucket = {
+                    "params": [],
+                    "size_bytes": 0,
+                    "ready_count": 0,
+                    "work": None,
+                    "numel": 0,
+                    "dtype": param.dtype,
+                }
+                bucket_id = len(self.buckets)
+                active_bucket[key] = (bucket_id, bucket)
                 self.buckets.append(bucket)
-                bucket_id += 1
-                # create new bucket.
-                bucket = {"size": param_bytes, "params": [param], "work": None}
-                # track my trackables
-                buffer_len = 0
-                self.param_to_bucket[param] = bucket_id
-                self.param_to_offset[param] = (buffer_len, buffer_len + param.numel())
-                buffer_len += param.numel()
+            else:
+                bucket_id, bucket = entry
 
-        # save the last bucket
-        total_numel = bucket["size"] // self.params[-1].element_size()
-        bucket["buffer"] = torch.empty(total_numel, device=self.params[-1].device)
-        bucket["ready_count"] = 0
-        self.buckets.append(bucket)
+            start = bucket["numel"]
+            end = start + param.numel()
+
+            bucket["size_bytes"] += param_bytes
+            bucket["numel"] = end
+            bucket["params"].append(param)
+
+            self.param_to_bucket[param] = bucket_id
+            self.param_to_offset[param] = (start, end)
+
+        for bucket in self.buckets:
+            bucket["buffer"] = torch.empty(
+                bucket["numel"], device=bucket["device"], dtype=bucket["dtype"]
+            )
 
     def prepare_missing_grad(self):
         """
