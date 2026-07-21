@@ -9,18 +9,17 @@ from torch.profiler import record_function
 from src.config import AppConfig
 from src.metrics import HistogramMetric, ScalarMetric
 from src.model.model import NanoTitanModel
-from src.parallel.reducer import ReducerV1
 from src.parallel_dims import ParallelDims
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineParallel:
-    def __init__(self, cfg: AppConfig, dim: ParallelDims, reducer: ReducerV1):
+    def __init__(self, cfg: AppConfig, dim: ParallelDims, reducers: dict):
         self.cfg = cfg
         self.dim = dim
         self.device = f"cuda:{dim.local_rank}"
-        self.reducer = reducer
+        self.reducers = reducers
         self.stage_inputs = []
         self.stage_outputs = []
 
@@ -89,7 +88,8 @@ class PipelineParallel:
             # Backward pass
             logger.debug(f"[RANK {self.dim.local_rank}] Beginning bwd pass")
             for microbatch_idx in reversed(range(self.cfg.runtime.num_microbatches)):
-                self.reducer.backward_grad_sync = microbatch_idx == 0
+                for reducer in self.reducers.values():
+                    reducer.backward_grad_sync = microbatch_idx == 0
                 ce_loss = (
                     ce_losses[microbatch_idx] / self.cfg.runtime.num_microbatches
                     if self.dim.is_pp_last_stage
@@ -98,7 +98,8 @@ class PipelineParallel:
                 moe_aux_loss = moe_aux_losses[microbatch_idx] / self.cfg.runtime.num_microbatches
                 self.backward(ce_loss, moe_aux_loss, model, microbatch_idx)
 
-            self.reducer.prepare_missing_grad()
+            for reducer in self.reducers.values():
+                reducer.prepare_missing_grad()
             self.finalize_backward()
 
         with record_function("optimizer_step"):
@@ -195,7 +196,8 @@ class PipelineParallel:
     def finalize_backward(self):
         self.stage_inputs = []
         self.stage_outputs = []
-        self.reducer.finalize_backward()
+        for reducer in self.reducers.values():
+            reducer.finalize_backward()
 
     def prepare_microbatch(self, x, y) -> None:
         batch_size = x.shape[0]

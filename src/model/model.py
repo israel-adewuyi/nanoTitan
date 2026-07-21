@@ -237,6 +237,24 @@ class NanoTitanModel(nn.Module):
     def active_parameter_count(self) -> int:
         return sum(layer.active_parameter_count() for layer in self.blocks)
 
+    def parameter_sync_groups(self) -> dict:
+        """This method returns the parameters that are shared (NanoTitan - Expert params) and parameters that are sharded (Expert params) for the DP group"""
+        expert_params = tuple(
+            param
+            for block in self.blocks
+            for param in block.ffn.experts.parameters()
+            if param.requires_grad
+        )
+        expert_ids = {id(param) for param in expert_params}
+
+        shared_params = tuple(
+            param
+            for param in self.parameters()
+            if param.requires_grad and id(param) not in expert_ids
+        )
+
+        return {"shared": shared_params, "expert": expert_params}
+
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[MoELayerStats]]:
         moe_stats = []
 

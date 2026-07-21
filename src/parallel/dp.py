@@ -1,5 +1,7 @@
 import torch
 import torch.distributed as dist
+import torch.nn as nn
+from torch.distributed import ProcessGroup
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -24,23 +26,54 @@ class DataParallel:
     def prepare_model(self, model):
         """
         This method
-        1. syncs the parameters across the dp_group to ensure state_dict is equal at the starts
+        1. syncs the parameters across the dp_group(s) to ensure state_dict is equal at the starts
         2. calls the reducer which registers hooks and divy parameters into buckets
         """
         model = model.to(self.device)
 
-        src = self.dims.dp_group_ranks[0]
-
-        with torch.no_grad():
-            for params in model.parameters():
-                dist.broadcast(params, src=src, group=self.dims.dp_group, async_op=False)
-
-        self.reducer = ReducerV1(
-            model, self.dims.dp_size, self.dims.dp_group, self.cfg.runtime.bucket_size
+        groups = model.parameter_sync_groups()
+        self.broadcast_parameters(
+            params=groups["shared"],
+            src_rank=self.dims.shared_dp_group_ranks[0],
+            group=self.dims.shared_dp_group,
         )
 
+        self.broadcast_parameters(
+            params=groups["expert"],
+            src_rank=self.dims.expert_dp_group_ranks[0],
+            group=self.dims.expert_dp_group,
+        )
+
+        self.shared_reducer = ReducerV1(
+            groups["shared"],
+            len(self.dims.shared_dp_group_ranks),
+            self.dims.shared_dp_group,
+            self.cfg.runtime.bucket_size,
+        )
+        self.expert_reducer = ReducerV1(
+            groups["expert"],
+            len(self.dims.expert_dp_group_ranks),
+            self.dims.expert_dp_group,
+            self.cfg.runtime.bucket_size,
+        )
+
+    def broadcast_parameters(
+        self,
+        params: tuple[nn.Parameter, ...],
+        src_rank: int,
+        group: ProcessGroup,
+        async_op: bool = False,
+    ):
+        with torch.no_grad():
+            for param in params:
+                dist.broadcast(param, src=src_rank, group=group, async_op=async_op)
+
     def finalize_backward(self):
-        self.reducer.finalize_backward()
+        self.shared_reducer.finalize_backward()
+        self.expert_reducer.finalize_backward()
+
+    def get_reducers(self) -> dict:
+        return {"shared": self.shared_reducer, "expert": self.expert_reducer}
 
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
         train_loader = DataLoader(

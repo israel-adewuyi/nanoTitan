@@ -1,28 +1,7 @@
 import torch
 import torch.distributed as dist
-
-from src.model.model import NanoTitanModel
-
-
-class ReducerV0:
-    """Primitive reducer class for DDP implementation"""
-
-    def __init__(self, model: NanoTitanModel, world_size: int):
-        self.world_size = world_size
-        self.params = [p for p in model.parameters() if p.requires_grad]
-        self.hook_handles = []
-
-        for p in self.params:
-            h = p.register_hook(self.reduce_grad)
-            self.hook_handles.append(h)
-
-    def reduce_grad(self, grad) -> torch.Tensor:
-        dist.all_reduce(grad, op=dist.ReduceOp.SUM)
-        grad = grad / self.world_size
-        return grad
-
-    def finalize_backward(self) -> None:
-        pass
+import torch.nn as nn
+from torch.distributed import ProcessGroup
 
 
 class ReducerV1:
@@ -34,11 +13,15 @@ class ReducerV1:
     """
 
     def __init__(
-        self, model: NanoTitanModel, group_size: int, process_group: list, bucket_size: int
+        self,
+        params: tuple[nn.Parameter, ...],
+        group_size: int,
+        process_group: ProcessGroup,
+        bucket_size: int,
     ):
         self.group_size = group_size
         self.process_group = process_group
-        self.params = [p for p in model.parameters() if p.requires_grad]
+        self.params = [p for p in params if p.requires_grad]
         self.hook_handles = []
         self.bucket_size = bucket_size * 1024 * 1024
         self.backward_grad_sync = False

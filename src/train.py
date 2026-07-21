@@ -105,10 +105,11 @@ def main() -> None:
     cfg.model.moe_router_dtype = resolve_dtype(cfg.model.moe_router_dtype)
 
     # Setup the model
+    # TODO: dataloader as well, dp rank
     model = NanoTitanModel.from_specs(cfg.model, spec)
     dp = DataParallel(cfg, dims)
     dp.prepare_model(model)
-    pp = PipelineParallel(cfg, dims, dp.reducer)
+    pp = PipelineParallel(cfg, dims, dp.get_reducers())
     logger.debug(model)
 
     metrics_logger = None
