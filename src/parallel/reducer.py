@@ -35,7 +35,7 @@ class ReducerV1:
 
     def initialize_buckets(self) -> None:
         """
-        This method allocates parameters to buckets in reverse order of model.parameters()
+        This method allocates parameters to buckets in reverse order of self.params()
         Assumptions.
         1. The max parameter fits into a bucket.
         2. All parameters are used.
@@ -52,9 +52,9 @@ class ReducerV1:
             param_bytes = param.numel() * param.element_size()
             key = param.dtype
 
-            entry = active_bucket[key]
+            entry = active_bucket.get(key)
 
-            if entry is None or entry[1]["size_bytes"] + param_bytes >= self.bucket_size:
+            if entry is None or entry[1]["size_bytes"] + param_bytes > self.bucket_size:
                 bucket = {
                     "params": [],
                     "size_bytes": 0,
@@ -62,6 +62,7 @@ class ReducerV1:
                     "work": None,
                     "numel": 0,
                     "dtype": param.dtype,
+                    "device": param.device,
                 }
                 bucket_id = len(self.buckets)
                 active_bucket[key] = (bucket_id, bucket)
