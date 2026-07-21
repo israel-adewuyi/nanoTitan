@@ -30,12 +30,12 @@ def get_layer_bounds(cfg: AppConfig, pp_rank: int):
     return (start_idx, end_idx)
 
 
-def get_logical_expert_bounds(ep_rank: int, ep_size: int, num_per_rank_experts: int):
+def get_logical_expert_bounds(ep_rank: int, num_per_rank_experts: int):
     """
     Each EP group maps to a subset of experts.
     Each EP rank holds a subset of experts and we return the indices of the experts.
     """
-    start_expert_id = ep_rank * ep_size
+    start_expert_id = ep_rank * num_per_rank_experts
     end_expert_id = start_expert_id + num_per_rank_experts
     return (start_expert_id, end_expert_id)
 
@@ -46,9 +46,7 @@ def get_model_shard_specs(dim: ParallelDims, cfg: AppConfig):
     has_unembed_head = dim.is_pp_last_stage
     layer_start, layer_end = get_layer_bounds(cfg, dim.pp_rank)
     num_per_rank_experts = dim.num_experts // dim.ep_size
-    start_expert_id, end_expert_id = get_logical_expert_bounds(
-        dim.ep_rank, dim.ep_size, num_per_rank_experts
-    )
+    start_expert_id, end_expert_id = get_logical_expert_bounds(dim.ep_rank, num_per_rank_experts)
 
     spec = ModelShardSpec(
         has_token_embed=has_token_embed,
