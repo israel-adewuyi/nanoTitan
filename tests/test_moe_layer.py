@@ -99,3 +99,28 @@ def test_model_active_parameter_count_uses_top_k_experts():
 
     assert model.total_parameter_count() == sum(param.numel() for param in model.parameters())
     assert model.active_parameter_count() == expected_active_params
+
+
+def test_parameter_sync_groups_handle_pipeline_boundary_blocks():
+    cfg = make_test_config()
+    spec = ModelShardSpec(
+        layer_start=0,
+        layer_end=cfg.n_layers,
+        has_token_embed=True,
+        has_pos_embed=True,
+        has_unembed_head=True,
+        per_rank_expert=cfg.num_experts,
+        start_expert_id=0,
+        end_expert_id=cfg.num_experts,
+    )
+    model = NanoTitanModel(cfg, spec)
+
+    groups = model.parameter_sync_groups()
+    shared_ids = {id(param) for param in groups["shared"]}
+    expert_ids = {id(param) for param in groups["expert"]}
+    trainable_ids = {id(param) for param in model.parameters() if param.requires_grad}
+
+    assert shared_ids
+    assert expert_ids
+    assert shared_ids.isdisjoint(expert_ids)
+    assert shared_ids | expert_ids == trainable_ids

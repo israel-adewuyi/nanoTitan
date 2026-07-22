@@ -242,6 +242,7 @@ class NanoTitanModel(nn.Module):
         expert_params = tuple(
             param
             for block in self.blocks
+            if isinstance(block, TransformerLayer)
             for param in block.ffn.experts.parameters()
             if param.requires_grad
         )
