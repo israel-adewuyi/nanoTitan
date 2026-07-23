@@ -84,7 +84,9 @@ class ExpertFFN(nn.Module):
     ):
         out = torch.empty_like(packed_X)
 
-        for e in range(self.cfg.num_experts):  # TODO: torch backend not compatible with dist MoE
+        for e in range(
+            self.spec.per_rank_expert
+        ):  # TODO: torch backend not compatible with dist MoE
             start = expert_offset[e].item()
             end = expert_offset[e + 1].item()
 
@@ -131,14 +133,15 @@ class MoE(nn.Module):
     def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
         super().__init__()
         self.cfg = cfg
+        self.spec = spec
         self.experts = ExpertFFN(cfg, spec)
         self.router = nn.Linear(
             self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.moe_router_dtype
         )
         if cfg.moe_backend == "cuda":
-            self.moe_backend = CUDAMoEBackend(cfg, self.experts, self.router)
+            self.moe_backend = CUDAMoEBackend(cfg, self.experts, self.router, spec)
         else:
-            self.moe_backend = TorchMoEBackend(cfg, self.experts, self.router)
+            self.moe_backend = TorchMoEBackend(cfg, self.experts, self.router, spec)
 
     def active_parameter_count(self) -> int:
         router_params = sum(param.numel() for param in self.router.parameters())

@@ -16,6 +16,7 @@ class ModelShardSpec:
     per_rank_expert: int
     start_expert_id: int
     end_expert_id: int
+    ep_size: int
 
 
 def get_layer_bounds(cfg: AppConfig, pp_rank: int):
@@ -57,6 +58,7 @@ def get_model_shard_specs(dim: ParallelDims, cfg: AppConfig):
         per_rank_expert=num_per_rank_experts,
         start_expert_id=start_expert_id,
         end_expert_id=end_expert_id,
+        ep_size=dim.ep_size,
     )
 
     return spec
