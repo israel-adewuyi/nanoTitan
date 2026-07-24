@@ -7,7 +7,7 @@ from torch.profiler import record_function
 
 from src.config import ModelConfig
 from src.model.moe_ops import torch_backend_all_to_all
-from src.model.utils import ModelShardSpec
+from src.model.utils import ModelShardSpec, MoELayerStats
 
 logger = logging.getLogger(__name__)
 
@@ -150,4 +150,8 @@ class TorchMoEBackend:
         weighted_outputs = (returned_outputs * packed_weights.unsqueeze(1)).to(pool.dtype)
         pool.index_add_(0, packed_token_ids, weighted_outputs)
 
-        return (pool.reshape(batch, seq_len, d_model), tokens_per_expert)
+        moe_stats = MoELayerStats(
+            tokens_per_expert.detach(), probs_per_expert=expert_probs, cfg=self.cfg
+        )
+
+        return (pool.reshape(batch, seq_len, d_model), moe_stats)
