@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import torch
+from torch.distributed import ProcessGroup
 
 from src.config import AppConfig, ModelConfig
 from src.parallel_dims import ParallelDims
@@ -16,7 +17,8 @@ class ModelShardSpec:
     per_rank_expert: int
     start_expert_id: int
     end_expert_id: int
-    ep_size: int
+    ep_size: int = 1
+    ep_group: ProcessGroup | None = None
 
 
 def get_layer_bounds(cfg: AppConfig, pp_rank: int):
@@ -59,6 +61,7 @@ def get_model_shard_specs(dim: ParallelDims, cfg: AppConfig):
         start_expert_id=start_expert_id,
         end_expert_id=end_expert_id,
         ep_size=dim.ep_size,
+        ep_group=dim.ep_group,
     )
 
     return spec

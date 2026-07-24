@@ -1,6 +1,8 @@
 from typing import Any
 
 import torch
+import torch.distributed as dist
+from torch.distributed import ProcessGroup
 
 from src.model.cuda_extension import get_cuda_extension
 
@@ -19,6 +21,20 @@ def pack_tokens_fn(X, topk_weights, topk_experts, expert_offset_cpy):
 
 def grouped_gemm_fn(X, weight, expert_offset):
     return GroupedGEMM_FN.apply(X, expert_offset, weight)
+
+
+def torch_backend_all_to_all(
+    x: torch.Tensor,
+    input_splits,
+    output_splits,
+    group: ProcessGroup,
+) -> torch.Tensor:
+    return TorchBackendAll2ALL.apply(
+        x,
+        input_splits,
+        output_splits,
+        group,
+    )
 
 
 class PackTokensFN(torch.autograd.Function):
@@ -107,3 +123,38 @@ class GroupedGEMM_FN(torch.autograd.Function):
         dW = nanotitan_cuda.bwd_grouped_gemm_dW_kernel(X, expert_offset, out_grad)
 
         return dX, None, dW
+
+
+class TorchBackendAll2ALL(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx, x: torch.Tensor, input_splits, output_splits, group: ProcessGroup
+    ) -> torch.Tensor:
+        ctx.input_splits = input_splits
+        ctx.output_splits = output_splits
+        ctx.group = group
+
+        output = x.new_empty((sum(output_splits), *x.shape[1:]))
+
+        dist.all_to_all_single(
+            output,
+            x.contiguous(),
+            input_split_sizes=input_splits,
+            output_split_sizes=output_splits,
+            group=group,
+        )
+
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        grad_input = grad_output.new_empty((sum(ctx.input_splits), *grad_output.shape[1:]))
+
+        dist.all_to_all_single(
+            grad_input,
+            grad_output.contiguous(),
+            input_split_sizes=ctx.output_splits,
+            output_split_sizes=ctx.input_splits,
+            group=ctx.group,
+        )
+        return grad_input, None, None, None
