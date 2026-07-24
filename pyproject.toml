@@ -80,6 +80,7 @@ known-first-party = ["nanotitan_cuda"]
 [tool.pytest.ini_options]
 markers = [
     "cuda: requires CUDA and the compiled CUDA extension",
+    "distributed: requires launching with multiple torch.distributed ranks",
 ]
 addopts = "--strict-markers"
 
