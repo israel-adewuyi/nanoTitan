@@ -78,6 +78,7 @@ ignore = ["F722", "F821", "E501"]
 known-first-party = ["nanotitan_cuda"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 markers = [
     "cuda: requires CUDA and the compiled CUDA extension",
     "distributed: requires launching with multiple torch.distributed ranks",
