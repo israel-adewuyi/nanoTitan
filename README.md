@@ -2,7 +2,7 @@
 
 **nanoTitan is a Mixture-of-Experts training stack for learning distributed training and CUDA kernel engineering from first principles.**
 
-The repository currently contains a small autoregressive LM, 2D parallelism (DP + PP), a CUDA-backed MoE dispatch path, autograd kernels, and early grouped-GEMM implementations.
+The repository currently contains a small autoregressive LM, 2D parallelism (DP + PP), a CUDA-backed MoE dispatch path, autograd kernels, and basic grouped-GEMM implementations.
 
 ---
 
@@ -10,8 +10,7 @@ The repository currently contains a small autoregressive LM, 2D parallelism (DP 
 
 ### Distributed training
 
-- A per-parameter all-reduce DDP baseline.
-- A bucketed reducer with asynchronous all-reduce and autograd hooks.
+- DP with bucketed reducer with asynchronous all-reduce and autograd hooks.
 - Explicit DP and PP process-group construction.
 - GPipe-style pipeline parallelism with microbatches.
 - 2D DP × PP composition.
@@ -53,10 +52,67 @@ nanoTitan/
 
 ---
 
+## Testing
+
+### CPU-compatible tests
+
+Install the CPU environment:
+
+```bash
+uv sync --locked --extra cpu --dev --no-install-project
+```
+
+Run tests that do not require CUDA or multiple distributed ranks:
+
+```bash
+uv run --no-sync pytest -m "not cuda and not distributed"
+```
+
+### CUDA tests
+
+Install the CUDA environment and build the CUDA extension:
+
+```bash
+uv sync --locked --extra cu124 --dev
+```
+
+Run only the CUDA tests:
+
+```bash
+uv run --no-sync pytest -m "cuda and not distributed"
+```
+
+Run all single-process tests, including CPU-compatible and CUDA tests:
+
+```bash
+uv run --no-sync pytest -m "not distributed"
+```
+
+### Distributed torch EP test
+
+Launch the unsharded-versus-sharded torch EP correctness test with two ranks:
+
+```bash
+uv run --no-sync torchrun --standalone --nproc-per-node=2 --module pytest -q tests/distributed/test_torch_ep_a2a.py
+```
+
+The test uses NCCL when CUDA is available and otherwise falls back to Gloo.
+
+### Complete test suite
+
+On a machine with the CUDA extension built and two available ranks, run:
+
+```bash
+uv run --no-sync pytest -m "not distributed"
+uv run --no-sync torchrun --standalone --nproc-per-node=2 --module pytest -q tests/distributed/test_torch_ep_a2a.py
+```
+
+---
+
 # ToDO
 
-- [x] DDP
-- [x] Benchmark DDP
+- [x] DP
+- [x] Benchmark DP
 - [x] Pipeline Parallelism (PP)
 - [ ] Benchmark PP
 - [ ] Tensor Parallelism (TP)
