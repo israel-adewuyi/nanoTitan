@@ -37,6 +37,10 @@ def torch_backend_all_to_all(
     )
 
 
+def permute_expert_assignment_fn(X: torch.Tensor, src_matrix: torch.Tensor):
+    return PermuteExpertAssignment.apply(X, src_matrix)
+
+
 class PackTokensFN(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -158,3 +162,18 @@ class TorchBackendAll2ALL(torch.autograd.Function):
             group=ctx.group,
         )
         return grad_input, None, None, None
+
+
+class PermuteExpertAssignment(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, X, src_matrix) -> torch.Tensor:
+        ctx.save_for_backward(src_matrix.T.contiguous())
+        nanotitan_cuda = get_cuda_extension()
+        return nanotitan_cuda.permute_expert_assignment_kernel(X, src_matrix)
+
+    @staticmethod
+    def backward(ctx, out_grad) -> torch.Tensor:
+        nanotitan_cuda = get_cuda_extension()
+        (dest_matrix,) = ctx.saved_tensors
+        X_grad = nanotitan_cuda.permute_expert_assignment_kernel(out_grad.contiguous(), dest_matrix)
+        return X_grad, None

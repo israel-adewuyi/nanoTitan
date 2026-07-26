@@ -84,9 +84,7 @@ class ExpertFFN(nn.Module):
     ):
         out = torch.empty_like(packed_X)
 
-        for e in range(
-            self.spec.per_rank_expert
-        ):  # TODO: torch backend not compatible with dist MoE
+        for e in range(self.spec.per_rank_expert):
             start = expert_offset[e].item()
             end = expert_offset[e + 1].item()
 
