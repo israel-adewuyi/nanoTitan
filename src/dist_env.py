@@ -5,7 +5,7 @@ import torch.distributed as dist
 
 
 def init_distributed():
-    if is_distributed() or int(os.environ.get("WORLD_SIZE", "1")) == 1:
+    if is_distributed():
         return
 
     local_rank = int(os.environ["LOCAL_RANK"])

@@ -4,7 +4,7 @@ max_steps = 2
 [model]
 vocab_size = 50257
 d_model = 128
-max_seq_len = 768
+max_seq_len = 512
 n_layers = 8
 d_head = 16
 n_heads = 8
@@ -31,10 +31,10 @@ type = "adam"
 lr = "1e-3"
 
 [runtime]
-name = "pp_gpipe"
 num_microbatches = 1
-dp_size = 2
-pp_size = 2
+dp_size = 1
+pp_size = 1
+ep_size = 1
 
 [profiler]
 enabled = false

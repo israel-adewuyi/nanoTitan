@@ -30,7 +30,6 @@ type = "adam"
 lr = "1e-3"
 
 [runtime]
-name = "pp_gpipe"
 num_microbatches = 1
 bucket_size = 150
 dp_size = 2
