@@ -19,10 +19,11 @@ setup(
                 "csrc/kernels/grouped_gemm.cu",
                 "csrc/kernels/count_experts.cu",
                 "csrc/kernels/combine_kernels.cu",
-                "csrc/kernels/backward_combine_kernel.cu",
-                "csrc/kernels/backward_pack_kernel.cu",
+                "csrc/kernels/permute_assignments.cu",
                 "csrc/kernels/bwd_grouped_gemm_dW.cu",
                 "csrc/kernels/bwd_grouped_gemm_dX.cu",
+                "csrc/kernels/backward_pack_kernel.cu",
+                "csrc/kernels/backward_combine_kernel.cu",
             ],
             include_dirs=[
                 str(ROOT / "csrc"),

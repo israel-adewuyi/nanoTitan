@@ -55,6 +55,10 @@ torch::Tensor bwd_grouped_gemm_dX_kernel(
     torch::Tensor expert_offset,
     torch::Tensor dOut
 );
+torch::Tensor permute_expert_assignment_kernel(
+    torch::Tensor X,
+    torch::Tensor src_matrix
+);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("random_op", &random_op, "Random op");
@@ -89,4 +93,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     &bwd_grouped_gemm_dX_kernel,
     "Kernel to compute derivatives w.r.t X (up proj) in grouped gemm");
 
+    m.def("permute_expert_assignment_kernel", &permute_expert_assignment_kernel, 
+    "Kernel to reorder the incoming residual stream after A2A");
 }
