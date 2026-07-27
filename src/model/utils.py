@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import torch
 import torch.distributed as dist
 from torch.distributed import ProcessGroup
-from torch.nn.utils import clip_grads_with_norm_, get_total_norm
 
 from src.config import AppConfig, ModelConfig, TrainerConfig
 from src.parallel_dims import ParallelDims

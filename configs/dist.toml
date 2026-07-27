@@ -1,5 +1,5 @@
 run_name = "cuda_backend"
-max_steps = 2
+max_steps = 20
 
 [model]
 vocab_size = 50257
@@ -24,7 +24,7 @@ grad_norm = 2
 
 [data]
 dataset_name = "roneneldan/TinyStories"
-num_workers = 4
+num_workers = 1
 
 [optim]
 type = "adam"

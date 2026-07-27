@@ -96,6 +96,8 @@ def main() -> None:
     # divide ranks into their respective process groups, based on the parallelism config
     dims = get_parallel_dims(cfg.runtime)
     logger.debug(f"At rank {dims.global_rank}, {repr(dims)}")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     # allocate model layers to different ranks, including token, pos embed and umembed layer
     spec = get_model_shard_specs(dims, cfg)
