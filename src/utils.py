@@ -6,8 +6,10 @@ from pathlib import Path
 import torch
 import torch.distributed as dist
 
-from src.config import AppConfig, load_config
+from src.config import AppConfig, load_config, TrainerConfig
 from src.metrics import MetricsLogger
+from src.model.model import NanoTitanModel
+from src.parallel_dims import ParallelDims
 
 
 def setup_logging(level: str = "INFO") -> None:
@@ -61,3 +63,32 @@ def get_profiler_trace_dir() -> Path | None:
     if self.log_dir is None or not self.is_main_rank():
         return None
     return self.log_dir / "profiler"
+
+
+def compute_grad_norm(model: NanoTitanModel, dims: ParallelDims) -> torch.Tensor:
+    expert_params, nonexpert_params = [], []
+    expert_param_name_slug = ["W_gate", "W_val", "W_out"]
+
+    for name, param in model.named_parameters():
+        if param.grad is None:
+            continue
+        found = any(pname in name for pname in expert_param_name_slug)
+        if found:
+            expert_params.append(param.grad)
+        else:
+            nonexpert_params.append(param.grad)
+
+    ep_squared_norm = get_total_norm(expert_params) ** 2
+    nonep_squared_norm = get_total_norm(nonexpert_params) ** 2
+
+    dist.all_reduce(ep_squared_norm, op=dist.ReduceOp.SUM, group=dims.ep_group)
+    dist.all_reduce(ep_squared_norm, op=dist.ReduceOp.SUM, group=dims.pp_group)
+    dist.all_reduce(nonep_squared_norm, op=dist.ReduceOp.SUM, group=dims.pp_group)
+
+    global_norm = torch.sqrt(ep_squared_norm + nonep_squared_norm)
+    assert isinstance(global_norm, torch.Tensor)
+    return global_norm
+
+
+def clip_gradients(model: NanoTitanModel, grad_norm: torch.Tensor, cfg: TrainerConfig):
+    clip_grads_with_norm_(model.parameters(), max_norm=cfg.grad_norm, total_norm=grad_norm)

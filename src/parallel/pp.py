@@ -9,7 +9,7 @@ from torch.profiler import record_function
 from src.config import AppConfig
 from src.metrics import HistogramMetric, ScalarMetric
 from src.model.model import NanoTitanModel
-from src.model.utils import clip_gradients, compute_grad_norm
+from src.utils import clip_gradients, compute_grad_norm
 from src.parallel_dims import ParallelDims
 
 logger = logging.getLogger(__name__)
