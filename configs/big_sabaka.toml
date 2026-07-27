@@ -21,8 +21,7 @@ eval_every_step = -1
 per_device_batch_size = 16
 
 [data]
-train_tokens_path = "data/preprocessed/tinystories_train.bin"
-val_tokens_path = "data/preprocessed/tinystories_val.bin"
+dataset_name = "roneneldan/TinyStories"
 num_workers = 4
 
 [optim]

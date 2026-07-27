@@ -118,9 +118,12 @@ def main() -> None:
 
     # Setup the data loader for train and test
     train_dataset = PackedTokenDataset(
-        path=cfg.data.train_tokens_path, seq_len=cfg.model.max_seq_len
+        name=cfg.data.dataset_name,
+        seq_len=cfg.model.max_seq_len,
+        seed=cfg.trainer.seed,
+        rank=dims.data_rank,
+        world_size=dims.data_world_size,
     )
-    # val_dataset = PackedTokenDataset(path=cfg.data.val_tokens_path, seq_len=cfg.model.max_seq_len)
     train_loader = dp.prepare_trainloader(train_dataset)
     # val_loader = dp.prepare_valloader(val_dataset)
 

@@ -20,8 +20,7 @@ class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     num_workers: PositiveInt
-    train_tokens_path: str
-    val_tokens_path: str
+    dataset_name: str
 
 
 class OptimizerConfig(BaseModel):
@@ -115,6 +114,7 @@ class TrainerConfig(BaseModel):
     eval_every_step: int
     per_device_batch_size: PositiveInt
     seed: PositiveInt
+    grad_norm: float
 
 
 class AppConfig(BaseModel):

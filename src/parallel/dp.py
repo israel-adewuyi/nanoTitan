@@ -80,12 +80,6 @@ class DataParallel:
             train_dataset,
             batch_size=self.cfg.trainer.per_device_batch_size,
             shuffle=False,
-            sampler=DistributedSampler(
-                dataset=train_dataset,
-                shuffle=True,
-                num_replicas=self.dims.data_world_size,
-                rank=self.dims.data_rank,
-            ),
             num_workers=self.cfg.data.num_workers,
             pin_memory=True,
             drop_last=True,

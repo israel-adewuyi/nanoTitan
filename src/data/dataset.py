@@ -1,27 +1,25 @@
-from pathlib import Path
-
-import numpy as np
 import torch
-from torch.utils.data import Dataset
+from datasets import load_dataset
+from datasets.distributed import split_dataset_by_node
+from torch.utils.data import IterableDataset
+
+from src.data.tokenizer import TiktokenTokenizer
 
 
-class PackedTokenDataset(Dataset):
-    def __init__(self, path: str, seq_len: int):
-        self.path = Path(path)
+class PackedTokenDataset(IterableDataset):
+    def __init__(self, name: str, seq_len: int, seed: int, rank: int, world_size: int):
         self.seq_len = seq_len
-        self.tokens = np.memmap(self.path, dtype=np.uint16, mode="r")
+        dataset = load_dataset(name, split="train", streaming=True).shuffle(
+            seed=seed, buffer_size=10_000
+        )
+        self.dataset = split_dataset_by_node(dataset, rank=rank, world_size=world_size)
 
-        # need seq_len + 1 tokens because y is shifted by 1
-        self.num_sequences = (len(self.tokens) - 1) // self.seq_len
-
-    def __len__(self) -> int:
-        return self.num_sequences
-
-    def __getitem__(self, idx: int):
-        start = idx * self.seq_len
-        end = start + self.seq_len + 1
-
-        chunk = self.tokens[start:end].astype(np.int64)
-        x = torch.tensor(chunk[:-1], dtype=torch.long)
-        y = torch.tensor(chunk[1:], dtype=torch.long)
-        return x, y
+    def __iter__(self):
+        tokenizer = TiktokenTokenizer("gpt2")
+        tokens = []
+        for example in self.dataset:
+            tokens.extend(tokenizer.encode(example["text"]))
+            while len(tokens) >= self.seq_len + 1:
+                chunk = tokens[: self.seq_len + 1]
+                del tokens[: self.seq_len]
+                yield torch.tensor(chunk[:-1]), torch.tensor(chunk[1:])
