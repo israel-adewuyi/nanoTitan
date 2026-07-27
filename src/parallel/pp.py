@@ -9,6 +9,7 @@ from torch.profiler import record_function
 from src.config import AppConfig
 from src.metrics import HistogramMetric, ScalarMetric
 from src.model.model import NanoTitanModel
+from src.model.utils import clip_gradients, compute_grad_norm
 from src.parallel_dims import ParallelDims
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,9 @@ class PipelineParallel:
             for reducer in self.reducers.values():
                 reducer.prepare_missing_grad()
             self.finalize_backward()
+
+        grad_norm = compute_grad_norm(model, self.dim)
+        clip_gradients(model, grad_norm, self.cfg.trainer)
 
         with record_function("optimizer_step"):
             optimizer.step()
