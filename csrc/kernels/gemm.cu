@@ -109,7 +109,7 @@ torch::Tensor launch_naive_gemm(
     int K = A.size(1);
     int N = B.size(1);
 
-    torch::Tensor C = torch::zeros({M, N}, A.options());
+    torch::Tensor C = torch::empty({M, N}, A.options());
 
     dim3 threads (16, 16);
     dim3 blocks (
@@ -149,7 +149,7 @@ torch::Tensor launch_tiled_gemm(
     size_t K = static_cast<size_t>(A.size(1));
     size_t N = static_cast<size_t>(B.size(1));
 
-    torch::Tensor C = torch::zeros(
+    torch::Tensor C = torch::empty(
         {static_cast<int64_t>(M), static_cast<int64_t>(N)},
         A.options()
     );

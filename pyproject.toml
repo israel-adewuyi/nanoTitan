@@ -18,6 +18,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "matplotlib",
     "ninja",
     "setuptools",
     "wheel",
