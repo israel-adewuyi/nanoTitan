@@ -20,7 +20,6 @@ from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
 from src.utils import (
     load_run_config,
-    reduce_scalars,
     resolve_dtype,
     seed_everything,
     setup_logging,
@@ -129,11 +128,26 @@ def main() -> None:
     train_loader = dp.prepare_trainloader(train_dataset)
     # val_loader = dp.prepare_valloader(val_dataset)
 
-    total_params = torch.tensor([model.total_parameter_count()], device=dims.global_rank)
-    active_params = torch.tensor([model.active_parameter_count()], device=dims.global_rank)
+    parameter_groups = model.parameter_sync_groups()
+    shared_params = sum(param.numel() for param in parameter_groups["shared"])
+    expert_params = sum(param.numel() for param in parameter_groups["expert"])
 
-    reduce_scalars(total_params, dims.pp_group)
-    reduce_scalars(active_params, dims.pp_group)
+    if dims.dp_rank == 0:
+        shared_params = shared_params if dims.ep_rank == 0 else 0
+        local_total_params = shared_params + expert_params
+        local_active_params = (
+            shared_params + expert_params * cfg.model.top_k / cfg.model.num_experts
+        )
+    else:
+        local_total_params = local_active_params = 0
+
+    parameter_counts = torch.tensor(
+        [local_total_params, local_active_params],
+        dtype=torch.float64,
+        device=next(model.parameters()).device,
+    )
+    dist.all_reduce(parameter_counts, op=dist.ReduceOp.SUM)
+    total_params, active_params = parameter_counts.tolist()
 
     if dims.global_rank == 0:
         logger.info(

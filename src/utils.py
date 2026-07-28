@@ -7,7 +7,7 @@ import torch
 import torch.distributed as dist
 from torch.nn.utils import clip_grads_with_norm_, get_total_norm
 
-from src.config import AppConfig, load_config, TrainerConfig
+from src.config import AppConfig, TrainerConfig, load_config
 from src.metrics import MetricsLogger
 from src.model.model import NanoTitanModel
 from src.parallel_dims import ParallelDims

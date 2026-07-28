@@ -9,8 +9,8 @@ from torch.profiler import record_function
 from src.config import AppConfig
 from src.metrics import HistogramMetric, ScalarMetric
 from src.model.model import NanoTitanModel
-from src.utils import clip_gradients, compute_grad_norm
 from src.parallel_dims import ParallelDims
+from src.utils import clip_gradients, compute_grad_norm
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,6 @@ class PipelineParallel:
 
         self.synchronize_device()
         step_start_time = time.perf_counter()
-        # self._reset_peak_memory_stats()
 
         optimizer.zero_grad()
         ce_losses, moe_aux_losses, moe_stats_list = [], [], []
