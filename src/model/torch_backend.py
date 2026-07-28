@@ -70,8 +70,6 @@ class TorchMoEBackend:
             local_expert_offsets = expert_offsets
             permutation = None
         else:
-            logging.info(expert_offsets)
-
             send_matrix = tokens_per_expert.view(self.spec.ep_size, self.spec.per_rank_expert)
             recv_matrix = torch.empty_like(send_matrix)
 
@@ -82,13 +80,8 @@ class TorchMoEBackend:
                 output_split_sizes=[1] * self.spec.ep_size,
                 group=self.spec.ep_group,
             )
-            logging.info(f"Send matrix is {send_matrix}")
-            logging.info(f"Recv matrix is {recv_matrix}")
-
             send_splits = send_matrix.sum(dim=1)
             recv_splits = recv_matrix.sum(dim=1)
-            logging.info(f"Send count: {send_splits}")
-            logging.info(f"Receiver count: {recv_splits}")
 
             receiver_X = torch_backend_all_to_all(
                 packed_X,
@@ -96,8 +89,6 @@ class TorchMoEBackend:
                 output_splits=recv_splits.tolist(),
                 group=self.spec.ep_group,
             )
-
-            logging.info(f"Shape of received X is : {receiver_X.shape}")
 
             src_offsets = torch.zeros(
                 (self.spec.ep_size, self.spec.per_rank_expert),

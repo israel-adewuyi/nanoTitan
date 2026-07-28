@@ -59,9 +59,12 @@ torch::Tensor permute_expert_assignment_kernel(
     );
 
     torch::Tensor src_matrix_1D = src_matrix.view({num_local_experts * ep_group_size});
-    torch::Tensor src_offset = src_matrix_1D.cumsum(0) - src_matrix_1D;
+    auto src_offset = at::cumsum(src_matrix_1D, 0, at::kInt) - src_matrix_1D;
     torch::Tensor dest_matrix_1D = src_matrix.transpose(1, 0).contiguous().view({(num_local_experts * ep_group_size)});
-    torch::Tensor dest_offset = dest_matrix_1D.cumsum(0) - dest_matrix_1D;
+    auto dest_offset = at::cumsum(dest_matrix_1D, 0, at::kInt) - dest_matrix_1D;
+
+    TORCH_CHECK(src_offset.scalar_type() == at::kInt);
+    TORCH_CHECK(dest_offset.scalar_type() == at::kInt);
 
     int max_tokens = src_matrix.max().item<int>();
 
