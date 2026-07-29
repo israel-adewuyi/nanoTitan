@@ -27,6 +27,7 @@ class ReducerV1:
         self.backward_grad_sync = False
         self.ready_for_sync = set()
 
+        self.next_bucket_to_launch = 0
         self.initialize_buckets()
 
         for p in self.params:
@@ -59,6 +60,7 @@ class ReducerV1:
                     "params": [],
                     "size_bytes": 0,
                     "ready_count": 0,
+                    "ready": False,
                     "work": None,
                     "numel": 0,
                     "dtype": param.dtype,
@@ -113,18 +115,28 @@ class ReducerV1:
 
         self.ready_for_sync.add(param)
 
-        temp_bucket = self.buckets[self.param_to_bucket[param]]
+        bucket = self.buckets[self.param_to_bucket[param]]
         grad = param.grad
         start, end = self.param_to_offset[param]
 
-        temp_bucket["buffer"][start:end].copy_(grad.flatten())
-        temp_bucket["ready_count"] += 1
+        bucket["buffer"][start:end].copy_(grad.flatten())
+        bucket["ready_count"] += 1
 
-        if temp_bucket["ready_count"] == len(temp_bucket["params"]):
-            work = dist.all_reduce(
-                temp_bucket["buffer"], op=dist.ReduceOp.SUM, group=self.process_group, async_op=True
+        if bucket["ready_count"] == len(bucket["params"]):
+            bucket["ready"] = True
+            self.launch_all_reduce()
+
+    def launch_all_reduce(self):
+        while self.next_bucket_to_launch < len(self.buckets):
+            bucket = self.buckets[self.next_bucket_to_launch]
+
+            if not bucket["ready"]:
+                break
+
+            bucket["work"] = dist.all_reduce(
+                bucket["buffer"], op=dist.ReduceOp.SUM, group=self.process_group, async_op=True
             )
-            temp_bucket["work"] = work
+            self.next_bucket_to_launch += 1
 
     def finalize_backward(self):
         """
@@ -141,5 +153,7 @@ class ReducerV1:
 
             bucket["ready_count"] = 0
             bucket["work"] = None
-            self.backward_grad_sync = False
-            self.ready_for_sync.clear()
+            bucket["ready"] = False
+        self.next_bucket_to_launch = 0
+        self.backward_grad_sync = False
+        self.ready_for_sync.clear()

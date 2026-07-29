@@ -17,7 +17,6 @@ dtype = "float32"
 
 [trainer]
 seed = 42
-device_id = 3
 eval_every_step = -1
 per_device_batch_size = 16
 grad_norm = 2
