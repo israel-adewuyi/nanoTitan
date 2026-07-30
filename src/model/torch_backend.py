@@ -39,6 +39,10 @@ class TorchMoEBackend:
             topk_weights, topk_expert_idx = torch.topk(expert_probs, dim=-1, k=self.cfg.top_k)
         expert_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
 
+        # Load balancing trains the router without directly shaping the residual stream.
+        moe_aux_logits = self.router(flat_tokens.detach().to(router_dtype))
+        moe_aux_probs = moe_aux_logits.softmax(dim=-1)
+
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
         tokens_per_expert = torch.bincount(
@@ -142,7 +146,7 @@ class TorchMoEBackend:
         pool.index_add_(0, packed_token_ids, weighted_outputs)
 
         moe_stats = MoELayerStats(
-            tokens_per_expert.detach(), probs_per_expert=expert_probs, cfg=self.cfg
+            tokens_per_expert.detach(), probs_per_expert=moe_aux_probs, cfg=self.cfg
         )
 
         return (pool.reshape(batch, seq_len, d_model), moe_stats)

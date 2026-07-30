@@ -45,7 +45,7 @@ class CUDAMoEBackend:
                 dim=-1, keepdim=True
             )  # also in fp32 (or whatever dtype router is)
 
-        # TODO: Will experimentally validate later. But this seems like the intuitive solution
+        # Load balancing trains the router without directly shaping the residual stream.
         moe_aux_logits = self.router(flat_tokens.detach().to(router_dtype))
         moe_aux_probs = moe_aux_logits.softmax(dim=-1)
 

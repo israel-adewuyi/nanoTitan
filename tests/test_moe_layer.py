@@ -66,6 +66,58 @@ def test_moe_output_shape():
     assert y.shape == x.shape
 
 
+@pytest.mark.cuda
+def test_cuda_moe_matches_torch_forward_and_backward():
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA unavailable")
+    pytest.importorskip("nanotitan_cuda")
+
+    torch.manual_seed(0)
+    cfg_torch = make_test_config()
+    cfg_cuda = make_test_config(moe_backend="cuda")
+    moe_torch = MoE(cfg_torch, make_test_spec(cfg_torch)).to("cuda")
+    moe_cuda = MoE(cfg_cuda, make_test_spec(cfg_cuda)).to("cuda")
+
+    with torch.no_grad():
+        moe_torch.router.weight.copy_(torch.eye(cfg_torch.num_experts, cfg_torch.d_model))
+    moe_cuda.load_state_dict(moe_torch.state_dict())
+
+    x_torch = torch.tensor(
+        [
+            [
+                [4, 3, 0, 0, 0, 0, 0, 0],
+                [0, 0, 4, 3, 0, 0, 0, 0],
+                [4, 0, 3, 0, 0, 0, 0, 0],
+                [0, 4, 0, 3, 0, 0, 0, 0],
+            ]
+        ],
+        dtype=torch.float32,
+        device="cuda",
+        requires_grad=True,
+    )
+    x_cuda = x_torch.detach().clone().requires_grad_(True)
+
+    out_torch, stats_torch = moe_torch(x_torch)
+    out_cuda, stats_cuda = moe_cuda(x_cuda)
+    tolerance = {"rtol": 1e-4, "atol": 5e-4}
+
+    torch.testing.assert_close(out_cuda, out_torch, **tolerance)
+    torch.testing.assert_close(
+        stats_cuda.tokens_per_expert, stats_torch.tokens_per_expert, check_dtype=False
+    )
+    torch.testing.assert_close(stats_cuda.probs_per_expert, stats_torch.probs_per_expert)
+    torch.testing.assert_close(stats_cuda.aux_loss, stats_torch.aux_loss)
+
+    out_grad = torch.linspace(-1, 1, out_torch.numel(), device="cuda").reshape_as(out_torch)
+    ((out_torch * out_grad).sum() + stats_torch.aux_loss).backward()
+    ((out_cuda * out_grad).sum() + stats_cuda.aux_loss).backward()
+
+    torch.testing.assert_close(x_cuda.grad, x_torch.grad, **tolerance)
+    cuda_params = dict(moe_cuda.named_parameters())
+    for name, param in moe_torch.named_parameters():
+        torch.testing.assert_close(cuda_params[name].grad, param.grad, **tolerance)
+
+
 @pytest.mark.skip(reason="WIP")
 def test_model_can_return_moe_stats():
     cfg = make_test_config()
