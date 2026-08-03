@@ -45,6 +45,7 @@ class RuntimeConfig(BaseModel):
 
     # PP specific args
     num_microbatches: int = 1
+    pipeline_schedule: Literal["gpipe", "1f1b"] = "gpipe"
 
     dp_size: int = 1
     pp_size: int = 1

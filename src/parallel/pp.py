@@ -1,5 +1,6 @@
 import logging
 import time
+from dataclasses import dataclass
 
 import torch
 import torch.distributed as dist
@@ -9,10 +10,19 @@ from torch.profiler import record_function
 from src.config import AppConfig
 from src.metrics import HistogramMetric, ScalarMetric
 from src.model.model import NanoTitanModel
+from src.parallel.pp_schedules import get_pipeline_schedule
 from src.parallel_dims import ParallelDims
 from src.utils import clip_gradients, compute_grad_norm
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MicrobatchState:
+    input: torch.Tensor
+    output: torch.Tensor
+    ce_loss: torch.Tensor | None
+    aux_loss: torch.Tensor
 
 
 class PipelineParallel:
@@ -21,8 +31,8 @@ class PipelineParallel:
         self.dim = dim
         self.device = f"cuda:{dim.local_rank}"
         self.reducers = reducers
-        self.stage_inputs = []
-        self.stage_outputs = []
+        self.run_schedule = get_pipeline_schedule(cfg.runtime.pipeline_schedule)
+        self.microbatch_states = {}
 
     def synchronize_device(self):
         if torch.cuda.is_available():
@@ -32,75 +42,20 @@ class PipelineParallel:
         x, y = batch
         microbatch_x, microbatch_y = self.prepare_microbatch(x, y)
         self.microbatch_size = x.shape[0] // self.cfg.runtime.num_microbatches
+        self.microbatch_states.clear()
+        self.ce_losses = []
+        self.moe_aux_losses = []
+        self.moe_route_counts = []
 
         self.synchronize_device()
-        step_start_time = time.perf_counter()
+        self.step_start_time = time.perf_counter()
 
         optimizer.zero_grad()
-        ce_losses, moe_aux_losses, moe_stats_list = [], [], []
-        with record_function("forward_pass"):
-            for mb_x, mb_y in zip(microbatch_x, microbatch_y, strict=False):
-                if self.dim.is_pp_first_stage:
-                    mb_x = mb_x.to(self.device)
-                else:
-                    mb_x = torch.empty(
-                        (
-                            self.microbatch_size,
-                            self.cfg.model.max_seq_len,
-                            self.cfg.model.d_model,
-                        ),
-                        device=self.device,
-                        dtype=self.cfg.model.dtype,
-                    )
-                    logger.debug(
-                        f"At rank {self.dim.local_rank}!!! Receiving activations from rank {self.dim.prev_pp_rank}"
-                    )
-                    dist.recv(mb_x, src=self.dim.prev_pp_rank, group=self.dim.pp_group)
-                    logger.debug(
-                        f"At rank {self.dim.local_rank}!!! Activations received from rank {self.dim.prev_pp_rank}"
-                    )
-                    mb_x.requires_grad_()
-                    self.stage_inputs.append(mb_x)
+        self.run_schedule(self, model, microbatch_x, microbatch_y)
 
-                mb_x, moe_stats = model(mb_x)
-
-                moe_aux_loss = (
-                    torch.stack([s.aux_loss for s in moe_stats]).mean() / self.dim.pp_size
-                )
-                moe_aux_losses.append(moe_aux_loss)
-                moe_stats_list.append(moe_stats)
-
-                if self.dim.is_pp_last_stage:
-                    # compute loss here
-                    mb_y = mb_y.to(self.device)
-                    loss = F.cross_entropy(mb_x.reshape(-1, mb_x.size(-1)), mb_y.reshape(-1))
-                    ce_losses.append(loss)
-                else:
-                    self.stage_outputs.append(mb_x)
-
-                    dist.send(mb_x, dst=self.dim.next_pp_rank, group=self.dim.pp_group)
-                    ce_losses.append(None)
-
-        self.synchronize_device()
-        forward_time = time.perf_counter() - step_start_time
-
-        with record_function("backward_pass"):
-            # Backward pass
-            logger.debug(f"[RANK {self.dim.local_rank}] Beginning bwd pass")
-            for microbatch_idx in reversed(range(self.cfg.runtime.num_microbatches)):
-                for reducer in self.reducers.values():
-                    reducer.backward_grad_sync = microbatch_idx == 0
-                ce_loss = (
-                    ce_losses[microbatch_idx] / self.cfg.runtime.num_microbatches
-                    if self.dim.is_pp_last_stage
-                    else None
-                )
-                moe_aux_loss = moe_aux_losses[microbatch_idx] / self.cfg.runtime.num_microbatches
-                self.backward(ce_loss, moe_aux_loss, model, microbatch_idx)
-
-            for reducer in self.reducers.values():
-                reducer.prepare_missing_grad()
-            self.finalize_backward()
+        for reducer in self.reducers.values():
+            reducer.prepare_missing_grad()
+        self.finalize_backward()
 
         grad_norm = compute_grad_norm(model, self.dim)
         clip_gradients(model, grad_norm, self.cfg.trainer)
@@ -108,7 +63,9 @@ class PipelineParallel:
         with record_function("optimizer_step"):
             optimizer.step()
         self.synchronize_device()
-        step_time = time.perf_counter() - step_start_time
+        step_time = time.perf_counter() - self.step_start_time
+
+        ce_losses = [loss for loss in self.ce_losses if loss is not None]
 
         metrics = {
             "train/ce_loss": ScalarMetric(
@@ -118,37 +75,102 @@ class PipelineParallel:
                 reduce="sum",
             ),
             "train/lb_loss": ScalarMetric(
-                (sum(moe_aux_losses) / self.cfg.runtime.num_microbatches).item()
+                (sum(self.moe_aux_losses) / self.cfg.runtime.num_microbatches).item()
                 if self.dim.is_pp_last_stage
                 else 0.0,
                 reduce="sum",
             ),
             "train/total_loss": ScalarMetric(
-                (sum(ce_losses) + sum(moe_aux_losses) / self.cfg.runtime.num_microbatches).item()
+                (
+                    sum(ce_losses) + sum(self.moe_aux_losses) / self.cfg.runtime.num_microbatches
+                ).item()
                 if self.dim.is_pp_last_stage
                 else 0.0,
                 reduce="sum",
             ),
             "time/step_time": ScalarMetric(step_time, reduce="max"),
-            "time/forward_time": ScalarMetric(forward_time, reduce="max"),
+            "time/forward_time": ScalarMetric(self.forward_time, reduce="max"),
         }
-        metrics.update(self._moe_route_fraction_metrics(model, moe_stats_list))
+        metrics.update(self._moe_route_fraction_metrics(model, self.moe_route_counts))
 
         return metrics
 
+    def record_forward_complete(self):
+        self.synchronize_device()
+        self.forward_time = time.perf_counter() - self.step_start_time
+
+    def forward_microbatch(self, microbatch_id, model, stage_input, target=None):
+        if not self.dim.is_pp_first_stage:
+            stage_input.requires_grad_()
+
+        stage_output, moe_stats = model(stage_input)
+        aux_loss = torch.stack([stats.aux_loss for stats in moe_stats]).mean() / self.dim.pp_size
+        ce_loss = None
+        if self.dim.is_pp_last_stage:
+            target = target.to(self.device)
+            ce_loss = F.cross_entropy(
+                stage_output.reshape(-1, stage_output.size(-1)), target.reshape(-1)
+            )
+
+        self.microbatch_states[microbatch_id] = MicrobatchState(
+            input=stage_input,
+            output=stage_output,
+            ce_loss=ce_loss,
+            aux_loss=aux_loss,
+        )
+        self.ce_losses.append(None if ce_loss is None else ce_loss.detach())
+        self.moe_aux_losses.append(aux_loss.detach())
+        self.moe_route_counts.append([stats.tokens_per_expert.detach() for stats in moe_stats])
+        return stage_output
+
+    def backward_microbatch(self, microbatch_id, output_grad=None, sync_gradients=False):
+        for reducer in self.reducers.values():
+            reducer.backward_grad_sync = sync_gradients
+
+        state = self.microbatch_states.pop(microbatch_id)
+        aux_loss = state.aux_loss / self.cfg.runtime.num_microbatches
+        if self.dim.is_pp_last_stage:
+            torch.autograd.backward([state.ce_loss / self.cfg.runtime.num_microbatches, aux_loss])
+        else:
+            torch.autograd.backward(
+                [state.output, aux_loss], [output_grad, torch.ones_like(aux_loss)]
+            )
+
+        return None if self.dim.is_pp_first_stage else state.input.grad
+
+    def recv_forward(self, microbatch_id):
+        stage_input = self._activation_buffer()
+        logger.debug("Receiving forward microbatch %s", microbatch_id)
+        dist.recv(stage_input, src=self.dim.prev_pp_rank, group=self.dim.pp_group)
+        return stage_input
+
+    def send_forward(self, microbatch_id, stage_output):
+        logger.debug("Sending forward microbatch %s", microbatch_id)
+        dist.send(stage_output, dst=self.dim.next_pp_rank, group=self.dim.pp_group)
+
+    def recv_backward(self, microbatch_id):
+        output_grad = self._activation_buffer()
+        logger.debug("Receiving backward microbatch %s", microbatch_id)
+        dist.recv(output_grad, src=self.dim.next_pp_rank, group=self.dim.pp_group)
+        return output_grad
+
+    def send_backward(self, microbatch_id, input_grad):
+        logger.debug("Sending backward microbatch %s", microbatch_id)
+        dist.send(input_grad, dst=self.dim.prev_pp_rank, group=self.dim.pp_group)
+
     def _moe_route_fraction_metrics(
-        self, model: NanoTitanModel, moe_stats_list
+        self, model: NanoTitanModel, moe_route_counts
     ) -> dict[str, ScalarMetric | HistogramMetric]:
         metrics = {}
         local_layer_fracs = {}
 
-        if moe_stats_list and moe_stats_list[0]:
-            num_local_layers = len(moe_stats_list[0])
+        if moe_route_counts and moe_route_counts[0]:
+            num_local_layers = len(moe_route_counts[0])
             for local_layer_idx in range(num_local_layers):
                 counts = torch.stack(
                     [
-                        mb_stats[local_layer_idx].tokens_per_expert.detach().float()
-                        for mb_stats in moe_stats_list
+                        microbatch_counts[local_layer_idx].float()
+                        for microbatch_counts in moe_route_counts
                     ],
                     dim=0,
                 ).sum(dim=0)
@@ -167,38 +189,8 @@ class PipelineParallel:
 
         return metrics
 
-    def backward(self, ce_loss, moe_aux_loss, model, microbatch_idx):
-        if self.dim.is_pp_last_stage:
-            torch.autograd.backward(
-                [ce_loss, moe_aux_loss],
-            )
-        else:
-            out_acts = self.stage_outputs[microbatch_idx]
-            out_acts_grad = torch.empty(
-                (
-                    self.microbatch_size,
-                    self.cfg.model.max_seq_len,
-                    self.cfg.model.d_model,
-                ),
-                dtype=self.cfg.model.dtype,
-                device=self.device,
-            )
-            dist.recv(out_acts_grad, src=self.dim.next_pp_rank, group=self.dim.pp_group)
-            torch.autograd.backward(
-                [out_acts, moe_aux_loss], [out_acts_grad, torch.ones_like(moe_aux_loss)]
-            )
-
-        # incoming.backward()
-        if not self.dim.is_pp_first_stage:
-            dist.send(
-                self.stage_inputs[microbatch_idx].grad,
-                dst=self.dim.prev_pp_rank,
-                group=self.dim.pp_group,
-            )
-
     def finalize_backward(self):
-        self.stage_inputs = []
-        self.stage_outputs = []
+        self.microbatch_states.clear()
         for reducer in self.reducers.values():
             reducer.finalize_backward()
 

@@ -30,6 +30,7 @@ lr = "1e-3"
 
 [runtime]
 num_microbatches = 1
+pipeline_schedule = "gpipe"
 bucket_size = 150
 dp_size = 2
 pp_size = 1
