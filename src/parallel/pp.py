@@ -75,17 +75,7 @@ class PipelineParallel:
                 reduce="sum",
             ),
             "train/lb_loss": ScalarMetric(
-                (sum(self.moe_aux_losses) / self.cfg.runtime.num_microbatches).item()
-                if self.dim.is_pp_last_stage
-                else 0.0,
-                reduce="sum",
-            ),
-            "train/total_loss": ScalarMetric(
-                (
-                    sum(ce_losses) + sum(self.moe_aux_losses) / self.cfg.runtime.num_microbatches
-                ).item()
-                if self.dim.is_pp_last_stage
-                else 0.0,
+                (sum(self.moe_aux_losses) / self.cfg.runtime.num_microbatches).item(),
                 reduce="sum",
             ),
             "time/step_time": ScalarMetric(step_time, reduce="max"),
@@ -182,7 +172,7 @@ class PipelineParallel:
             frac = local_layer_fracs.get(layer_idx)
             hist_value = torch.zeros(self.cfg.model.num_experts, dtype=torch.float32)
             if frac is not None:
-                hist_value = frac / self.dim.dp_size
+                hist_value = frac / self.dim.data_world_size
             metrics[f"moe/layer_{layer_idx:02d}/route_frac_dist"] = HistogramMetric(
                 hist_value, reduce="sum"
             )

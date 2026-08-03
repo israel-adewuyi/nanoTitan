@@ -173,7 +173,10 @@ def main() -> None:
             for batch in train_loader:
                 metrics = pp.train_step(model, batch, optimizer)
                 num_tokens = (
-                    cfg.trainer.per_device_batch_size * cfg.runtime.dp_size * cfg.model.max_seq_len
+                    cfg.trainer.per_device_batch_size
+                    * cfg.runtime.dp_size
+                    * cfg.model.max_seq_len
+                    * cfg.runtime.ep_size
                 )
                 metrics.update(
                     {
@@ -187,8 +190,11 @@ def main() -> None:
                 metrics["train/tokens_per_second"] = (
                     metrics["train/tokens_per_step"] / metrics["time/step_time"]
                 )
-                metrics["train/ce_loss"] = metrics["train/ce_loss"] / dims.dp_size
-
+                metrics["train/ce_loss"] = metrics["train/ce_loss"] / (dims.dp_size * dims.ep_size)
+                metrics["train/lb_loss"] = metrics["train/lb_loss"] / (dims.dp_size * dims.ep_size)
+                metrics.update(
+                    {"train/total_loss": metrics["train/ce_loss"] + metrics["train/lb_loss"]}
+                )
                 # Log metrics to tensorboard on rank 0
                 if dims.local_rank == 0:
                     logger.info(
