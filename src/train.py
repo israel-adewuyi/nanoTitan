@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import time
+from itertools import islice
 
 import torch
 import torch.distributed as dist
@@ -53,6 +55,44 @@ def reduce_metrics(
             reduced[name] = value.detach().cpu().to(torch.float32)
 
     return reduced
+
+
+def run_validation(
+    model: NanoTitanModel,
+    pipeline: PipelineParallel,
+    val_loader,
+    num_val_batches: int,
+    metric_device: torch.device,
+) -> dict[str, float]:
+    model.eval()
+    loss_sum = 0.0
+    token_count = 0
+    start_time = time.perf_counter()
+
+    for batch in islice(val_loader, num_val_batches):
+        batch_loss_sum, batch_token_count = pipeline.val_step(model, batch)
+        loss_sum += batch_loss_sum
+        token_count += batch_token_count
+
+    model.train()
+
+    reduced = reduce_metrics(
+        {
+            "val/loss_sum": ScalarMetric(loss_sum, reduce="sum"),
+            "val/token_count": ScalarMetric(token_count, reduce="sum"),
+            "time/validation_time": ScalarMetric(
+                time.perf_counter() - start_time,
+                reduce="max",
+            ),
+        },
+        metric_device,
+    )
+
+    return {
+        "val/ce_loss": reduced["val/loss_sum"] / reduced["val/token_count"],
+        "val/token_count": reduced["val/token_count"],
+        "time/validation_time": reduced["time/validation_time"],
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -117,7 +157,7 @@ def main() -> None:
     if dims.local_rank == 0:
         metrics_logger = MetricsLogger(cfg.run_name)
 
-    # Setup the data loader for train and test
+    # Setup the data loaders for training and validation.
     train_dataset = PackedTokenDataset(
         name=cfg.data.dataset_name,
         seq_len=cfg.model.max_seq_len,
@@ -126,7 +166,18 @@ def main() -> None:
         world_size=dims.data_world_size,
     )
     train_loader = dp.prepare_trainloader(train_dataset)
-    # val_loader = dp.prepare_valloader(val_dataset)
+    val_loader = None
+    if cfg.trainer.val_interval != -1:
+        val_dataset = PackedTokenDataset(
+            name=cfg.data.dataset_name,
+            seq_len=cfg.model.max_seq_len,
+            seed=cfg.trainer.seed,
+            rank=dims.data_rank,
+            world_size=dims.data_world_size,
+            split="validation",
+            shuffle=False,
+        )
+        val_loader = dp.prepare_valloader(val_dataset)
 
     parameter_groups = model.parameter_sync_groups()
     shared_params = sum(param.numel() for param in parameter_groups["shared"])
@@ -202,50 +253,29 @@ def main() -> None:
                     )
                     metrics_logger.log(step=iter, metrics=metrics)
 
+                completed_steps = iter + 1
+                if val_loader is not None and completed_steps % cfg.trainer.val_interval == 0:
+                    val_metrics = run_validation(
+                        model,
+                        pp,
+                        val_loader,
+                        cfg.trainer.num_val_batches,
+                        metric_device,
+                    )
+                    if dims.local_rank == 0:
+                        logger.info(
+                            "Step %s validation CE loss: %.6f",
+                            completed_steps,
+                            val_metrics["val/ce_loss"],
+                        )
+                        metrics_logger.log(step=iter, metrics=val_metrics)
+
                 iter += 1
 
                 prof.step()
 
                 if iter == cfg.max_steps:
                     break
-
-    #             if cfg.trainer.eval_every_step != -1 and (
-    #                 cfg.trainer.eval_every_step == 0
-    #                 or (step + 1) % cfg.trainer.eval_every_step == 0
-    #             ):
-    #                 model.eval()
-    #                 total_loss = 0.0
-    #                 num_val_batches = 0
-    #                 val_start_time = time.perf_counter()
-
-    #                 with torch.no_grad():
-    #                     for val_x, val_y in val_loader:
-    #                         val_x = val_x.to(runtime.device)
-    #                         val_y = val_y.to(runtime.device)
-
-    #                         logits = model(val_x)
-    #                         loss = F.cross_entropy(
-    #                             logits.reshape(-1, logits.size(-1)), val_y.reshape(-1)
-    #                         )
-
-    #                         total_loss += loss.item()
-    #                         num_val_batches += 1
-
-    #                 val_time = time.perf_counter() - val_start_time
-    #                 val_loss = total_loss / num_val_batches
-    #                 if runtime.is_main_rank():
-    #                     logger.info("[Step %s] Validation loss: %.6f", step, val_loss)
-    #                 runtime.log(
-    #                     step,
-    #                     {
-    #                         "val/loss": ScalarMetric(val_loss, reduce="mean"),
-    #                         "val/time": ScalarMetric(val_time, reduce="max"),
-    #                     },
-    #                 )
-    #                 model.train()
-
-    #             step += 1
-    #             step_start_time = time.perf_counter()
     finally:
         cleanup()
     cleanup()

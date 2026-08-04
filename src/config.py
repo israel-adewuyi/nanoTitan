@@ -109,10 +109,17 @@ class ModelConfig(BaseModel):
 
 class TrainerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    eval_every_step: int
+    val_interval: int
+    num_val_batches: PositiveInt
     per_device_batch_size: PositiveInt
     seed: PositiveInt
     grad_norm: float
+
+    @model_validator(mode="after")
+    def validate_val_interval(self) -> TrainerConfig:
+        if self.val_interval == 0 or self.val_interval < -1:
+            raise ValueError("trainer.val_interval must be -1 (disabled) or a positive integer")
+        return self
 
 
 class AppConfig(BaseModel):

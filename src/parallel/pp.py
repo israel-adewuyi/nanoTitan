@@ -85,6 +85,42 @@ class PipelineParallel:
 
         return metrics
 
+    @torch.inference_mode()
+    def val_step(self, model: NanoTitanModel, batch) -> tuple[float, int]:
+        x, y = batch
+        microbatch_x, microbatch_y = self.prepare_microbatch(x, y)
+        self.microbatch_size = x.shape[0] // self.cfg.runtime.num_microbatches
+
+        self.synchronize_device()
+        loss_sum = 0.0
+        token_count = 0
+
+        with record_function("validation_forward_pass"):
+            for microbatch_id, (micro_x, micro_y) in enumerate(
+                zip(microbatch_x, microbatch_y, strict=True)
+            ):
+                stage_input = (
+                    micro_x.to(self.device)
+                    if self.dim.is_pp_first_stage
+                    else self.recv_forward(microbatch_id)
+                )
+                stage_output, _ = model(stage_input)
+
+                if self.dim.is_pp_last_stage:
+                    target = micro_y.to(self.device)
+                    loss_sum += F.cross_entropy(
+                        stage_output.reshape(-1, stage_output.size(-1)),
+                        target.reshape(-1),
+                        reduction="sum",
+                    ).item()
+                    token_count += target.numel()
+
+                if not self.dim.is_pp_last_stage:
+                    self.send_forward(microbatch_id, stage_output)
+
+        self.synchronize_device()
+        return loss_sum, token_count
+
     def record_forward_complete(self):
         self.synchronize_device()
         self.forward_time = time.perf_counter() - self.step_start_time

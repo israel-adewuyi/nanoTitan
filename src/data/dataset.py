@@ -7,11 +7,20 @@ from src.data.tokenizer import TiktokenTokenizer
 
 
 class PackedTokenDataset(IterableDataset):
-    def __init__(self, name: str, seq_len: int, seed: int, rank: int, world_size: int):
+    def __init__(
+        self,
+        name: str,
+        seq_len: int,
+        seed: int,
+        rank: int,
+        world_size: int,
+        split: str = "train",
+        shuffle: bool = True,
+    ):
         self.seq_len = seq_len
-        dataset = load_dataset(name, split="train", streaming=True).shuffle(
-            seed=seed, buffer_size=10_000
-        )
+        dataset = load_dataset(name, split=split, streaming=True)
+        if shuffle:
+            dataset = dataset.shuffle(seed=seed, buffer_size=10_000)
         self.dataset = split_dataset_by_node(dataset, rank=rank, world_size=world_size)
 
     def __iter__(self):

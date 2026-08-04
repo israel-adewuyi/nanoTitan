@@ -3,7 +3,6 @@ import torch.distributed as dist
 import torch.nn as nn
 from torch.distributed import ProcessGroup
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
@@ -90,12 +89,9 @@ class DataParallel:
         val_loader = DataLoader(
             val_dataset,
             batch_size=self.cfg.trainer.per_device_batch_size,
+            shuffle=False,
             num_workers=1,
-            sampler=DistributedSampler(
-                dataset=val_dataset,
-                shuffle=False,
-            ),
             pin_memory=True,
-            drop_last=False,
+            drop_last=True,
         )
         return val_loader
