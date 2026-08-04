@@ -2,7 +2,7 @@
 
 **nanoTitan is a Mixture-of-Experts training stack for learning distributed training and CUDA kernel engineering from first principles.**
 
-The repository currently contains a small autoregressive LM, 2D parallelism (DP + PP), a CUDA-backed MoE dispatch path, autograd kernels, and basic grouped-GEMM implementations.
+The repository currently contains a small autoregressive LM, 3D parallelism (DP + PP + EP), a CUDA-backed MoE dispatch path, autograd kernels, and basic grouped-GEMM implementations.
 
 ---
 
@@ -13,7 +13,8 @@ The repository currently contains a small autoregressive LM, 2D parallelism (DP 
 - DP with bucketed reducer with asynchronous all-reduce and autograd hooks.
 - Explicit DP and PP process-group construction.
 - GPipe-style pipeline parallelism with microbatches.
-- 2D DP × PP composition.
+- Expert parallelism with all-to-all token dispatch across sharded experts.
+- 3D DP × PP composition.
 
 ### Mixture of Experts
 
@@ -108,17 +109,6 @@ uv run --no-sync torchrun --standalone --nproc-per-node=2 --module pytest -q tes
 ```
 
 ---
-
-# ToDO
-
-- [x] DP
-- [x] Benchmark DP
-- [x] Pipeline Parallelism (PP)
-- [ ] Benchmark PP
-- [ ] Tensor Parallelism (TP)
-- [ ] Benchmark TP
-- [ ] FSDP
-- [ ] Bechmark FSDP
 
 # Benchmark Results
 

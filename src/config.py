@@ -19,7 +19,6 @@ DTypeName = Literal["float16", "float32", "bfloat16"]
 class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    num_workers: PositiveInt
     dataset_name: str
 
 

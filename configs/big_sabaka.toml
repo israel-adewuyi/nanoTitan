@@ -22,7 +22,6 @@ per_device_batch_size = 16
 
 [data]
 dataset_name = "roneneldan/TinyStories"
-num_workers = 4
 
 [optim]
 type = "adam"

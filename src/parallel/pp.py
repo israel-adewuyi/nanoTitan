@@ -128,6 +128,17 @@ class PipelineParallel:
 
         return None if self.dim.is_pp_first_stage else state.input.grad
 
+    def _activation_buffer(self) -> torch.Tensor:
+        return torch.empty(
+            (
+                self.microbatch_size,
+                self.cfg.model.max_seq_len,
+                self.cfg.model.d_model,
+            ),
+            dtype=self.cfg.model.dtype,
+            device=self.device,
+        )
+
     def recv_forward(self, microbatch_id):
         stage_input = self._activation_buffer()
         logger.debug("Receiving forward microbatch %s", microbatch_id)

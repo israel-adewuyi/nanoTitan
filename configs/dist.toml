@@ -23,7 +23,6 @@ grad_norm = 2
 
 [data]
 dataset_name = "roneneldan/TinyStories"
-num_workers = 1
 
 [optim]
 type = "adam"

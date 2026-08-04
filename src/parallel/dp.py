@@ -80,7 +80,7 @@ class DataParallel:
             train_dataset,
             batch_size=self.cfg.trainer.per_device_batch_size,
             shuffle=False,
-            num_workers=self.cfg.data.num_workers,
+            num_workers=1,
             pin_memory=True,
             drop_last=True,
         )
@@ -90,7 +90,7 @@ class DataParallel:
         val_loader = DataLoader(
             val_dataset,
             batch_size=self.cfg.trainer.per_device_batch_size,
-            num_workers=self.cfg.data.num_workers,
+            num_workers=1,
             sampler=DistributedSampler(
                 dataset=val_dataset,
                 shuffle=False,
