@@ -146,12 +146,14 @@ def main() -> None:
     cfg.model.moe_router_dtype = resolve_dtype(cfg.model.moe_router_dtype)
 
     # Setup the model
-    # TODO: dataloader as well, dp rank
     model = NanoTitanModel.from_specs(cfg.model, spec)
     dp = DataParallel(cfg, dims)
     dp.prepare_model(model)
     pp = PipelineParallel(cfg, dims, dp.get_reducers())
     logger.debug(model)
+
+    if dims.local_rank == 0:
+        logger.debug(f"There are {len(list(model.parameters()))} parameters in the model")
 
     metrics_logger = None
     if dims.local_rank == 0:
