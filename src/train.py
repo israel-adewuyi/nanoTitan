@@ -21,6 +21,7 @@ from src.parallel import (
 from src.parallel_dims import get_parallel_dims
 from src.profiler import build_profiler
 from src.utils import (
+    SUCCESS,
     load_run_config,
     resolve_dtype,
     seed_everything,
@@ -250,8 +251,14 @@ def main() -> None:
                 )
                 # Log metrics to tensorboard on rank 0
                 if dims.local_rank == 0:
-                    logger.info(
-                        f"Rank is {dims.global_rank}, {metrics['train/ce_loss'], metrics['train/lb_loss']}"
+                    logger.log(
+                        SUCCESS,
+                        "Step %s | rank=%s | ce_loss=%.6f | lb_loss=%.6f | grad_norm=%.4f",
+                        iter + 1,
+                        dims.global_rank,
+                        metrics["train/ce_loss"],
+                        metrics["train/lb_loss"],
+                        metrics["train/grad_norm"],
                     )
                     metrics_logger.log(step=iter, metrics=metrics)
 

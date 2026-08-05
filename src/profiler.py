@@ -40,7 +40,7 @@ def build_profiler(run_name: str, cfg: ProfilerConfig, dims):
     if not cfg.enabled:
         return NoOpProfiler()
 
-    if not dims.global_rank == 0:
+    if dims.local_rank != 0:
         return NoOpProfiler()
 
     trace_dir = Path("runs") / f"{run_name}" / "profiler"
@@ -48,7 +48,12 @@ def build_profiler(run_name: str, cfg: ProfilerConfig, dims):
         return NoOpProfiler()
 
     trace_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("Torch profiler enabled. Traces will be written to %s", trace_dir)
+    worker_name = f"rank_{dims.global_rank}_trace"
+    logger.info(
+        "Torch profiler enabled for %s. Traces will be written to %s",
+        worker_name,
+        trace_dir,
+    )
 
     return torch.profiler.profile(
         activities=_get_activities(),
@@ -58,7 +63,9 @@ def build_profiler(run_name: str, cfg: ProfilerConfig, dims):
             active=cfg.active_steps,
             repeat=1,
         ),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(str(trace_dir)),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+            str(trace_dir), worker_name=worker_name
+        ),
         record_shapes=cfg.record_shapes,
         profile_memory=cfg.profile_memory,
         with_stack=cfg.with_stack,

@@ -1,5 +1,6 @@
 import logging
 import random
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -12,11 +13,41 @@ from src.metrics import MetricsLogger
 from src.model.model import NanoTitanModel
 from src.parallel_dims import ParallelDims
 
+SUCCESS = 25
+logging.addLevelName(SUCCESS, "SUCCESS")
+
+
+class ColorFormatter(logging.Formatter):
+    COLORS = {
+        logging.DEBUG: "\033[34m",
+        logging.INFO: "\033[36m",
+        SUCCESS: "\033[32m",
+        logging.WARNING: "\033[33m",
+        logging.ERROR: "\033[31m",
+        logging.CRITICAL: "\033[1;31m",
+    }
+
+    def format(self, record: logging.LogRecord) -> str:
+        levelname = record.levelname
+        color = self.COLORS.get(record.levelno, "")
+        if color:
+            record.levelname = f"{color}{levelname}\033[0m"
+        try:
+            return super().format(record)
+        finally:
+            record.levelname = levelname
+
 
 def setup_logging(level: str = "INFO") -> None:
+    handler = logging.StreamHandler(sys.stderr)
+    formatter = ColorFormatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    if not sys.stderr.isatty():
+        formatter.COLORS = {}
+    handler.setFormatter(formatter)
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        handlers=[handler],
+        force=True,
     )
 
 

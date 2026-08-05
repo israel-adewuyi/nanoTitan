@@ -78,6 +78,7 @@ class PipelineParallel:
                 (sum(self.moe_aux_losses) / self.cfg.runtime.num_microbatches).item(),
                 reduce="sum",
             ),
+            "train/grad_norm": ScalarMetric(grad_norm.item(), reduce="none"),
             "time/step_time": ScalarMetric(step_time, reduce="max"),
             "time/forward_time": ScalarMetric(self.forward_time, reduce="max"),
         }
