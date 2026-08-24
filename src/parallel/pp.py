@@ -52,11 +52,19 @@ class PipelineParallel:
         self.step_start_time = time.perf_counter()
 
         optimizer.zero_grad()
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(self.device)
         self.run_schedule(self, model, microbatch_x, microbatch_y)
 
         for reducer in self.reducers.values():
             reducer.prepare_missing_grad()
         self.finalize_backward()
+
+        peak_allocated_gib = (
+            torch.cuda.max_memory_allocated(self.device) / 1024**3
+            if torch.cuda.is_available()
+            else 0.0
+        )
 
         grad_norm = compute_grad_norm(model, self.dim)
         clip_gradients(model, grad_norm, self.cfg.trainer)
@@ -83,6 +91,20 @@ class PipelineParallel:
             "time/step_time": ScalarMetric(step_time, reduce="max"),
             "time/forward_completion_time": ScalarMetric(
                 self.forward_completion_time, reduce="max"
+            ),
+            "memory/pp_first_peak_allocated_gib": ScalarMetric(
+                peak_allocated_gib if self.dim.is_pp_first_stage else 0.0,
+                reduce="max",
+            ),
+            "memory/pp_middle_peak_allocated_gib": ScalarMetric(
+                peak_allocated_gib
+                if not self.dim.is_pp_first_stage and not self.dim.is_pp_last_stage
+                else 0.0,
+                reduce="max",
+            ),
+            "memory/pp_last_peak_allocated_gib": ScalarMetric(
+                peak_allocated_gib if self.dim.is_pp_last_stage else 0.0,
+                reduce="max",
             ),
         }
         metrics.update(self._moe_route_fraction_metrics(model, self.moe_route_counts))
