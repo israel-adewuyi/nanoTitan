@@ -13,7 +13,7 @@ def run_gpipe(pipeline, model, microbatch_x, microbatch_y):
             if not pipeline.dim.is_pp_last_stage:
                 pipeline.send_forward(microbatch_id, stage_output)
 
-    pipeline.record_forward_complete()
+    pipeline.record_forward_completion()
 
     with record_function("backward_pass"):
         for microbatch_id in reversed(range(len(microbatch_x))):

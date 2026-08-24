@@ -81,7 +81,9 @@ class PipelineParallel:
             ),
             "train/grad_norm": ScalarMetric(grad_norm.item(), reduce="none"),
             "time/step_time": ScalarMetric(step_time, reduce="max"),
-            "time/forward_time": ScalarMetric(self.forward_time, reduce="max"),
+            "time/forward_completion_time": ScalarMetric(
+                self.forward_completion_time, reduce="max"
+            ),
         }
         metrics.update(self._moe_route_fraction_metrics(model, self.moe_route_counts))
 
@@ -123,9 +125,9 @@ class PipelineParallel:
         self.synchronize_device()
         return loss_sum, token_count
 
-    def record_forward_complete(self):
+    def record_forward_completion(self):
         self.synchronize_device()
-        self.forward_time = time.perf_counter() - self.step_start_time
+        self.forward_completion_time = time.perf_counter() - self.step_start_time
 
     def forward_microbatch(self, microbatch_id, model, stage_input, target=None):
         if not self.dim.is_pp_first_stage:
@@ -202,6 +204,26 @@ class PipelineParallel:
     def send_backward(self, microbatch_id, input_grad):
         logger.debug("Sending backward microbatch %s", microbatch_id)
         dist.send(input_grad, dst=self.dim.prev_pp_rank, group=self.dim.pp_group)
+
+    def send_forward_recv_backward(self, stage_output):
+        output_grad = self._activation_buffer()
+        ops = [
+            dist.P2POp(dist.isend, stage_output, self.dim.next_pp_rank, self.dim.pp_group),
+            dist.P2POp(dist.irecv, output_grad, self.dim.next_pp_rank, self.dim.pp_group),
+        ]
+        for work in dist.batch_isend_irecv(ops):
+            work.wait()
+        return output_grad
+
+    def recv_forward_send_backward(self, input_grad):
+        stage_input = self._activation_buffer()
+        ops = [
+            dist.P2POp(dist.isend, input_grad, self.dim.prev_pp_rank, self.dim.pp_group),
+            dist.P2POp(dist.irecv, stage_input, self.dim.prev_pp_rank, self.dim.pp_group),
+        ]
+        for work in dist.batch_isend_irecv(ops):
+            work.wait()
+        return stage_input
 
     def _moe_route_fraction_metrics(
         self, model: NanoTitanModel, moe_route_counts
