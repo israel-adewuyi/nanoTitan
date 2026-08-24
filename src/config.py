@@ -45,11 +45,23 @@ class RuntimeConfig(BaseModel):
     # PP specific args
     num_microbatches: int = 1
     pipeline_schedule: Literal["gpipe", "1f1b"] = "gpipe"
+    activation_checkpointing: bool = False
 
     dp_size: int = 1
     pp_size: int = 1
     ep_size: int = 1
     num_expert: PositiveInt = 1
+
+    @model_validator(mode="after")
+    def validate_microbatches_for_pipeline_size(self) -> RuntimeConfig:
+        if self.pp_size == 1:
+            if self.num_microbatches != 1:
+                raise ValueError("runtime.num_microbatches must be 1 when runtime.pp_size is 1")
+            if self.activation_checkpointing:
+                raise ValueError(
+                    "runtime.activation_checkpointing must be false when runtime.pp_size is 1"
+                )
+        return self
 
 
 class ProfilerConfig(BaseModel):

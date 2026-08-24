@@ -6,6 +6,7 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from torch.profiler import record_function
+from torch.utils.checkpoint import checkpoint
 
 from src.config import AppConfig
 from src.metrics import HistogramMetric, ScalarMetric
@@ -130,7 +131,13 @@ class PipelineParallel:
         if not self.dim.is_pp_first_stage:
             stage_input.requires_grad_()
 
-        stage_output, moe_stats = model(stage_input)
+        if self.cfg.runtime.activation_checkpointing:
+            stage_output, moe_stats = checkpoint(
+                model, stage_input, use_reentrant=False, preserve_rng_state=True
+            )
+        else:
+            stage_output, moe_stats = model(stage_input)
+
         aux_loss = torch.stack([stats.aux_loss for stats in moe_stats]).mean() / self.dim.pp_size
         ce_loss = None
         if self.dim.is_pp_last_stage:
