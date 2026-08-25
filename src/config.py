@@ -20,6 +20,7 @@ class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     dataset_name: str
+    dataset_path: Path | None = None
 
 
 class OptimizerConfig(BaseModel):

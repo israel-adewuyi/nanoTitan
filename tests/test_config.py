@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.config import RuntimeConfig, load_config
+from src.config import DataConfig, RuntimeConfig, load_config
 
 
 @pytest.mark.parametrize(
@@ -20,6 +20,14 @@ def test_activation_checkpointing_defaults_to_disabled():
     config = RuntimeConfig()
 
     assert config.activation_checkpointing is False
+
+
+def test_data_config_accepts_optional_local_dataset_path(tmp_path):
+    path = tmp_path / "cached.pt"
+
+    config = DataConfig(dataset_name="source", dataset_path=path)
+
+    assert config.dataset_path == path
 
 
 def test_single_stage_pipeline_requires_one_microbatch():

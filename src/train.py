@@ -167,6 +167,7 @@ def main() -> None:
         seed=cfg.trainer.seed,
         rank=dims.data_rank,
         world_size=dims.data_world_size,
+        dataset_path=cfg.data.dataset_path,
     )
     train_loader = dp.prepare_trainloader(train_dataset)
     val_loader = None

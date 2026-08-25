@@ -20,3 +20,6 @@ checklist.md
 repo_tree.py
 repo-tree.txt
 src/runtime/
+
+# Materialized benchmark datasets
+/data/*.pt

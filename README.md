@@ -55,6 +55,29 @@ nanoTitan/
 
 ## Testing
 
+### Cache a benchmark dataset
+
+Materialize packed sequences once from the streaming dataset:
+
+```bash
+uv run --no-sync python -m scripts.cache_dataset \
+  --dataset-name roneneldan/TinyStories \
+  --seq-len 768 \
+  --num-sequences 100000 \
+  --output data/tinystories_seq768.pt
+```
+
+Then select it in a training configuration:
+
+```toml
+[data]
+dataset_name = "roneneldan/TinyStories"
+dataset_path = "data/tinystories_seq768.pt"
+```
+
+The cached sequence length must match `model.max_seq_len`. The same file can be reused with any
+per-device batch size and parallel configuration.
+
 ### CPU-compatible tests
 
 Install the CPU environment:
