@@ -1,11 +1,11 @@
-run_name = "testing_2000_steps"
-max_steps = 2000
+run_name = "GPU=1_DP_BS=9"
+max_steps = 200
 
 [model]
 vocab_size = 50257
 d_model = 512
-max_seq_len = 2048
-n_layers = 14
+max_seq_len = 512
+n_layers = 16
 d_head = 64
 n_heads = 8
 ffn_in = 2048
@@ -13,16 +13,18 @@ num_experts = 16
 top_k = 2
 router_alpha = 0.01
 moe_backend = "cuda"
+dtype = "bfloat16"
 
 [trainer]
 seed = 42
 grad_norm = 2
 val_interval = -1
 num_val_batches = 10
-per_device_batch_size = 16
+per_device_batch_size = 9
 
 [data]
 dataset_name = "roneneldan/TinyStories"
+dataset_path = "data/tinystories_seq512.pt"
 
 [optim]
 type = "adam"
@@ -33,7 +35,7 @@ num_microbatches = 1
 pipeline_schedule = "gpipe"
 activation_checkpointing = false
 bucket_size = 150
-dp_size = 2
+dp_size = 1
 pp_size = 1
 
 [profiler]
