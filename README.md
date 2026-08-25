@@ -94,10 +94,10 @@ uv run --no-sync pytest -m "not cuda and not distributed"
 
 ### CUDA tests
 
-Install the CUDA environment and build the CUDA extension:
+Install CUDA Toolkit 12.8, then install the CUDA environment and build the CUDA extension:
 
 ```bash
-uv sync --locked --extra cu124 --dev
+uv sync --locked --extra cu128 --dev
 ```
 
 Run only the CUDA tests:
