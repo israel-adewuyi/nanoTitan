@@ -1,4 +1,4 @@
-run_name = "GPU=1_DP_BS=9"
+run_name = "GPU=1_DP_BS=20"
 max_steps = 200
 
 [model]
@@ -9,7 +9,7 @@ n_layers = 16
 d_head = 64
 n_heads = 8
 ffn_in = 2048
-num_experts = 16
+num_experts = 20
 top_k = 2
 router_alpha = 0.01
 moe_backend = "cuda"
@@ -20,7 +20,7 @@ seed = 42
 grad_norm = 2
 val_interval = -1
 num_val_batches = 10
-per_device_batch_size = 9
+per_device_batch_size = 20
 
 [data]
 dataset_name = "roneneldan/TinyStories"
@@ -28,7 +28,7 @@ dataset_path = "data/tinystories_seq512.pt"
 
 [optim]
 type = "adam"
-lr = "1e-3"
+lr = "5e-4"
 
 [runtime]
 num_microbatches = 1
