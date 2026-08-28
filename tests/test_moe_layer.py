@@ -4,7 +4,7 @@ import torch
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
 from src.model.model import NanoTitanModel
-from src.model.utils import ModelShardSpec
+from src.model.utils import ModelShardSpec, topk_with_capacity
 from src.utils import resolve_dtype
 
 
@@ -64,6 +64,32 @@ def test_moe_output_shape():
     y, _ = moe(x)
 
     assert y.shape == x.shape
+
+
+def test_capacity_routing_reports_raw_counts_for_aux_loss():
+    cfg = make_test_config(d_model=4, num_experts=4, top_k=1)
+    cfg.capacity_factor = 1.0
+    moe = MoE(cfg, make_test_spec(cfg))
+
+    with torch.no_grad():
+        moe.router.weight.copy_(torch.eye(4))
+
+    x = torch.tensor([[[8.0, 6.0, 2.0, 0.0]]]).repeat(1, 4, 1)
+    _, stats = moe(x)
+
+    torch.testing.assert_close(
+        stats.tokens_per_expert,
+        torch.tensor([4, 0, 0, 0], dtype=stats.tokens_per_expert.dtype),
+    )
+
+
+def test_capacity_routing_normalizes_selected_logits_without_nan():
+    logits = torch.tensor([[1000.0, 0.0, -1000.0, -2000.0]]).repeat(4, 1)
+
+    weights, _, _, _ = topk_with_capacity(logits, top_k=2, capacity_factor=1.0)
+
+    assert torch.isfinite(weights).all()
+    torch.testing.assert_close(weights.sum(dim=-1), torch.ones(4))
 
 
 @pytest.mark.cuda

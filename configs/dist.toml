@@ -11,6 +11,7 @@ n_heads = 8
 ffn_in = 512
 num_experts = 16
 top_k = 2
+capacity_factor = 1.25
 router_alpha = 0.01
 moe_backend = "cuda"
 dtype = "float32"

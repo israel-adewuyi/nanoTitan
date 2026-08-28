@@ -7,7 +7,7 @@ from torch.profiler import record_function
 
 from src.config import ModelConfig
 from src.model.moe_ops import torch_backend_all_to_all
-from src.model.utils import ModelShardSpec, MoELayerStats
+from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +35,11 @@ class TorchMoEBackend:
             expert_logits = self.router(flat_tokens.to(router_dtype))
 
         with record_function("moe/topK"):
-            expert_probs = expert_logits.softmax(dim=-1)
-            topk_weights, topk_expert_idx = torch.topk(expert_probs, dim=-1, k=self.cfg.top_k)
-        expert_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
+            expert_weights, topk_expert_idx, expert_count, raw_expert_count = topk_with_capacity(
+                expert_logits,
+                top_k=self.cfg.top_k,
+                capacity_factor=self.cfg.capacity_factor,
+            )
 
         # Load balancing trains the router without directly shaping the residual stream.
         moe_aux_logits = self.router(flat_tokens.detach().to(router_dtype))
@@ -45,9 +47,7 @@ class TorchMoEBackend:
 
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
-        tokens_per_expert = torch.bincount(
-            topk_expert_idx.reshape(-1), minlength=self.cfg.num_experts
-        )
+        tokens_per_expert = expert_count
         expert_offsets = torch.empty(self.cfg.num_experts + 1, dtype=torch.long, device=x.device)
         expert_offsets[0] = 0
         expert_offsets[1:] = torch.cumsum(tokens_per_expert, dim=0)
@@ -146,7 +146,7 @@ class TorchMoEBackend:
         pool.index_add_(0, packed_token_ids, weighted_outputs)
 
         moe_stats = MoELayerStats(
-            tokens_per_expert.detach(), probs_per_expert=moe_aux_probs, cfg=self.cfg
+            raw_expert_count.detach(), probs_per_expert=moe_aux_probs, cfg=self.cfg
         )
 
         return (pool.reshape(batch, seq_len, d_model), moe_stats)

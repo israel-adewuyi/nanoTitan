@@ -102,6 +102,7 @@ class ModelConfig(BaseModel):
     ffn_in: PositiveInt
     num_experts: PositiveInt
     top_k: PositiveInt
+    capacity_factor: float = Field(default=1.25, ge=1.0)
     token_embedding: TokenEmbeddingConfig = Field(default_factory=TokenEmbeddingConfig)
     positional_embedding: PositionalEmbeddingConfig = Field(
         default_factory=PositionalEmbeddingConfig

@@ -12,6 +12,7 @@ ffn_in = 2048
 num_experts = 20
 top_k = 2
 router_alpha = 0.01
+capacity_factor = 1.25
 moe_backend = "cuda"
 dtype = "bfloat16"
 

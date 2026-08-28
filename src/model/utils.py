@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 
 import torch
@@ -91,3 +92,120 @@ class MoELayerStats:
             * self.cfg.num_experts
             * torch.sum(self.ass_frac_per_expert * self.probs_per_expert)
         )
+
+
+def topk_with_capacity(
+    expert_logits: torch.Tensor,
+    top_k: int,
+    capacity_factor: float = 1.25,
+):
+    """
+    expert_logits: [N, E], attached to autograd.
+
+    Returns:
+        weights:       [N, K], attached
+        final_idx:     [N, K], discrete
+        final_count:   [E]
+        raw_count:     [E]
+    """
+    N, E = expert_logits.shape
+
+    capacity = math.ceil(capacity_factor * N * top_k / E)
+    with torch.no_grad():
+        raw_idx = torch.topk(
+            expert_logits.detach(),
+            k=top_k,
+            dim=-1,
+        ).indices  # [N, K]
+
+        raw_count = torch.bincount(
+            raw_idx.flatten(),
+            minlength=E,
+        )
+
+        # Rank all experts for each token.
+        ranked_idx = torch.argsort(
+            expert_logits.detach(),
+            dim=-1,
+            descending=True,
+        )  # [N, E]
+
+        ranked_logits = expert_logits.detach().gather(1, ranked_idx)
+
+        final_idx = torch.full(
+            (N, top_k),
+            -1,
+            dtype=torch.long,
+            device=expert_logits.device,
+        )
+
+        # How many assignments each token already has.
+        token_slots = torch.zeros(
+            N,
+            dtype=torch.long,
+            device=expert_logits.device,
+        )
+
+        # Current capacity usage.
+        final_count = torch.zeros(
+            E,
+            dtype=torch.long,
+            device=expert_logits.device,
+        )
+
+        # Try 1st choice, then 2nd, then 3rd, ...
+        for candidate_rank in range(E):
+            candidate_expert = ranked_idx[:, candidate_rank]
+            candidate_score = ranked_logits[:, candidate_rank]
+
+            for expert_id in range(E):
+                remaining = capacity - int(final_count[expert_id].item())
+
+                if remaining <= 0:
+                    continue
+
+                eligible = (token_slots < top_k) & (candidate_expert == expert_id)
+
+                tokens = eligible.nonzero(as_tuple=False).flatten()
+
+                if tokens.numel() == 0:
+                    continue
+
+                # Expert is oversubscribed:
+                # keep tokens that wanted it most strongly.
+                if tokens.numel() > remaining:
+                    scores = candidate_score[tokens]
+
+                    keep = torch.topk(
+                        scores,
+                        k=remaining,
+                        sorted=False,
+                    ).indices
+
+                    tokens = tokens[keep]
+
+                slots = token_slots[tokens]
+
+                final_idx[tokens, slots] = expert_id
+                token_slots[tokens] += 1
+                final_count[expert_id] += tokens.numel()
+
+        if not torch.all(token_slots == top_k):
+            raise RuntimeError(
+                f"Some tokens failed to obtain {top_k} experts. "
+                f"min slots={token_slots.min().item()}"
+            )
+
+    selected_logits = expert_logits.gather(
+        dim=1,
+        index=final_idx,
+    )
+
+    weights = selected_logits.softmax(dim=-1)
+
+    return (
+        weights,
+        final_idx.to(torch.int32),
+        final_count.to(torch.int32),
+        raw_count.to(torch.int32),
+    )
