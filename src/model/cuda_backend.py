@@ -4,14 +4,13 @@ import torch.nn as nn
 from torch.profiler import record_function
 
 from src.config import ModelConfig
-from src.model.cuda_extension import get_cuda_extension
 from src.model.moe_ops import (
     combine_tokens_fn,
     pack_tokens_fn,
     permute_expert_assignment_fn,
     torch_backend_all_to_all,
 )
-from src.model.utils import ModelShardSpec, MoELayerStats
+from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
 
 
 class CUDAMoEBackend:
@@ -37,13 +36,11 @@ class CUDAMoEBackend:
             )  # cast to fp32 (or whatever dtype router is)
 
         with record_function("moe/topK"):
-            expert_probs = expert_logits.softmax(
-                dim=-1
-            )  # also in fp32 (or whatever dtype router is)
-            topk_weights, topk_expert_idx = torch.topk(expert_probs, dim=-1, k=self.cfg.top_k)
-            expert_weights = topk_weights / topk_weights.sum(
-                dim=-1, keepdim=True
-            )  # also in fp32 (or whatever dtype router is)
+            expert_weights, topk_expert_idx, expert_count, raw_expert_count = topk_with_capacity(
+                expert_logits,
+                top_k=self.cfg.top_k,
+                capacity_factor=self.cfg.capacity_factor,
+            )
 
         # Load balancing trains the router without directly shaping the residual stream.
         moe_aux_logits = self.router(flat_tokens.detach().to(router_dtype))
@@ -52,14 +49,6 @@ class CUDAMoEBackend:
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
         with record_function("moe/count_expert"):
-            mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)
-
-            # Lazily import cuda extension
-            nanotitan_cuda = get_cuda_extension()
-            expert_count = nanotitan_cuda.count_expert_kernel(
-                topk_expert_idx.to(torch.int32), mask, self.cfg.num_experts, self.cfg.top_k
-            )
-
             expert_offsets = torch.empty(
                 self.cfg.num_experts + 1, device=x.device, dtype=torch.int32
             )
@@ -71,7 +60,7 @@ class CUDAMoEBackend:
             packed_X, packed_tokenId, _, packed_topk_weights = pack_tokens_fn(
                 flat_tokens,
                 expert_weights,
-                topk_expert_idx.to(torch.int32),
+                topk_expert_idx,
                 expert_offsets_cpy,
             )
 
@@ -131,7 +120,9 @@ class CUDAMoEBackend:
             ).to(dtype=returned_outputs.dtype)
 
         moe_stats = MoELayerStats(
-            tokens_per_expert=expert_count.detach(), probs_per_expert=moe_aux_probs, cfg=self.cfg
+            tokens_per_expert=raw_expert_count.detach(),
+            probs_per_expert=moe_aux_probs,
+            cfg=self.cfg,
         )
 
         return (pool.reshape(batch, seq_len, d_model), moe_stats)
