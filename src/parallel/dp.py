@@ -51,7 +51,7 @@ class DataParallel:
         )
         self.expert_reducer = ReducerV1(
             groups["expert"],
-            len(self.dims.expert_dp_group_ranks),
+            self.dims.data_world_size,
             self.dims.expert_dp_group,
             self.cfg.runtime.bucket_size,
         )

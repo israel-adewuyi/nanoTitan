@@ -10,15 +10,15 @@ The repository currently contains a small autoregressive LM, 3D parallelism (DP 
 
 ### Distributed training
 
-- DP with bucketed reducer with asynchronous all-reduce and autograd hooks.
-- Explicit DP and PP process-group construction.
-- GPipe-style pipeline parallelism with microbatches.
+- DP, bucketed reducer with asynchronous all-reduce calls.
+- Explicit process-group construction.
+- GPipe, 1F1B pipeline parallelism schedules.
 - Expert parallelism with all-to-all token dispatch across sharded experts.
-- 3D DP × PP composition.
+- 3D DP × PP x EP composition.
 
 ### Mixture of Experts
 
-- Top-k routing with renormalized FP32 gate weights.
+- Top-k routing, expert-capacity load balancing.
 - Load-balancing loss and per-layer routing statistics.
 - CUDA kernels for expert counting, token packing, and weighted combine.
 - Custom autograd wrappers and backward kernels for pack and combine.
@@ -27,8 +27,7 @@ The repository currently contains a small autoregressive LM, 3D parallelism (DP 
 
 ### CUDA and profiling
 
-- Expert-grouped GEMM forward kernel.
-- Grouped-GEMM gradients for inputs and weights.
+- Expert-grouped GEMM kernels.
 - Tests covering both up-projection and down-projection matrix shapes.
 - Pack/combine microbenchmarks and an Nsight Compute launcher.
 
@@ -53,11 +52,21 @@ nanoTitan/
 
 ---
 
-## Testing
+## Getting Started
 
-### Cache a benchmark dataset
+Clone repo
 
-Materialize packed sequences once from the streaming dataset:
+```
+git clone https://github.com/israel-adewuyi/nanoTitan.git && cd nanoTitan
+```
+
+Install CUDA Toolkit, CUDA environment and build the CUDA extension
+
+```
+uv sync --python 3.11 --locked --extra cu128
+```
+
+### Cache dataset locally from the streaming dataset:
 
 ```bash
 uv run --no-sync python -m scripts.cache_dataset \
@@ -75,8 +84,9 @@ dataset_name = "roneneldan/TinyStories"
 dataset_path = "data/tinystories_seq768.pt"
 ```
 
-The cached sequence length must match `model.max_seq_len`. The same file can be reused with any
-per-device batch size and parallel configuration.
+The cached sequence length must match `model.max_seq_len`.
+
+## Testing
 
 ### CPU-compatible tests
 
@@ -93,12 +103,6 @@ uv run --no-sync pytest -m "not cuda and not distributed"
 ```
 
 ### CUDA tests
-
-Install CUDA Toolkit 12.8, then install the CUDA environment and build the CUDA extension:
-
-```bash
-uv sync --locked --extra cu128 --dev
-```
 
 Run only the CUDA tests:
 
@@ -137,37 +141,65 @@ uv run --no-sync torchrun --standalone --nproc-per-node=2 --module pytest -q tes
 
 ## Model Specs
 
-| Spec                    |       Value |
-| ----------------------- | ----------: |
-| Total parameters        |         92M |
-| Layers                  |          16 |
-| Hidden size             |         512 |
-| Attention heads         |          16 |
-| Head dimension          |          32 |
-| FFN hidden size         |       2,048 |
-| Vocabulary size         |      50,257 |
-| Sequence length         |         768 |
-| Optimizer               |        Adam |
-| Dataset                 | TinyStories |
-| Seed                    |          42 |
-| Learning rate           |        5e-4 |
-| #training steps (1 GPU) |  6000 steps |
-| #training steps (2 GPU) |  3500 steps |
+These specifications correspond to [`configs/big_sabaka.toml`](configs/big_sabaka.toml).
+
+| Spec                   |                                  Value |
+| ---------------------- | -------------------------------------: |
+| Parameters             |                              1B-A-170M |
+| Layers                 |                                     16 |
+| Hidden size            |                                    512 |
+| Attention heads        |                                      8 |
+| Head dimension         |                                     64 |
+| Experts per MoE layer  |                                     20 |
+| Active experts/token   |                                      2 |
+| Expert FFN size        |                                  2,048 |
+| Expert capacity factor |                                   1.25 |
+| Vocabulary size        |                                 50,257 |
+| Sequence length        |                                    512 |
+| Model precision        |                               bfloat16 |
+| Router precision       |                                float32 |
+| MoE backend            |                                   CUDA |
+| Optimizer              |                                  AdamW |
+| Learning rate          |                                   5e-4 |
+| Gradient clipping      |                                    2.0 |
+| Dataset                | TinyStories (`roneneldan/TinyStories`) |
+| Seed                   |                                     42 |
 
 ## Benchmark Table
 
-To compute the throughput and timing metrics, we use first 10% of steps as warmup and average over the next 80% of values (Step 350 - 3149 for DDP, Steps 600 - 5399 for Single GPU runs).
+# Summary metrics
 
-| Mode                    | GPU | Total batch size | tokens/sec | step time | Backward time | Number of tokens | Final loss |
-| ----------------------- | --: | ---------------: | ---------: | --------: | ------------: | ---------------: | ---------: |
-| Bucketed AllReduce DDP  |   2 |               80 |  31,928.99 |    1.9243 |        1.2623 |      215M tokens |     1.7621 |
-| Per-param AllReduce DDP |   2 |               80 |  31,448.13 |    1.9537 |        1.2920 |      215M tokens |     1.7621 |
-| Reference DDP (Pytorch) |   2 |               80 |  31,888.37 |    1.9267 |        1.2625 |      215M tokens |     1.7621 |
-| Single GPU              |   1 |               40 |  16,045.61 |    1.9145 |        1.2500 |      184M tokens |     1.7392 |
+For the swept PP experiments, the selected runs use the default 1F1B schedule with activation checkpointing enabled. The 2-GPU result uses 7 microbatches, while the 4-GPU result uses 12 microbatches. Where an 8-GPU composition has two configurations, the configuration with the higher measured throughput is reported.
 
-## Plots
+#### 2 GPUs
 
-Loss plot
-![Loss plot](assets/ddp/loss.png)
-Grad Norm plot
-![!Grad Norm plot](assets/ddp/grad_norm.png)
+| Mode                    | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) | Tokens trained |
+| ----------------------- | ---: | --: | --: | --: | ---------------: | ---------: | ------------: | -------------: |
+| DP                      |    2 |   2 |   1 |   1 |               42 |    2,665.9 |         8.066 |      4,300,800 |
+| PP · 1F1B · AC on · M=7 |    2 |   1 |   2 |   1 |               42 |    2,155.1 |         9.979 |      4,300,800 |
+| EP                      |    2 |   1 |   1 |   2 |               42 |    2,638.8 |         8.150 |      4,300,800 |
+
+#### 4 GPUs
+
+| Mode                     | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) | Tokens trained |
+| ------------------------ | ---: | --: | --: | --: | ---------------: | ---------: | ------------: | -------------: |
+| DP                       |    4 |   4 |   1 |   1 |               84 |    6,046.5 |         7.114 |      8,601,600 |
+| PP · 1F1B · AC on · M=12 |    4 |   1 |   4 |   1 |               84 |    3,343.6 |        12.877 |      8,601,600 |
+| EP                       |    4 |   1 |   1 |   4 |               84 |    5,102.8 |         8.430 |      8,601,600 |
+| DP + PP                  |    4 |   2 |   2 |   1 |               84 |    3,186.8 |        13.496 |      8,601,600 |
+| DP + EP                  |    4 |   2 |   1 |   2 |               84 |    5,439.6 |         7.908 |      8,601,600 |
+| PP + EP                  |    4 |   1 |   2 |   2 |               84 |    3,133.3 |        13.770 |      8,601,600 |
+
+#### 8 GPUs
+
+| Mode         | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) | Tokens trained |
+| ------------ | ---: | --: | --: | --: | ---------------: | ---------: | ------------: | -------------: |
+| DP           |    8 |   8 |   1 |   1 |               40 |    3,674.2 |         5.574 |      2,048,000 |
+| PP           |    8 |   1 |   8 |   1 |               40 |    2,228.2 |         9.191 |      2,048,000 |
+| EP           |    8 |   1 |   1 |   8 |               40 |    3,203.4 |         6.393 |      2,048,000 |
+| DP + PP      |    8 |   2 |   4 |   1 |               40 |    1,728.0 |        11.852 |      2,048,000 |
+| DP + EP      |    8 |   4 |   1 |   2 |               40 |    3,546.9 |         5.774 |      2,048,000 |
+| PP + EP      |    8 |   1 |   4 |   2 |               40 |    1,606.7 |        12.748 |      2,048,000 |
+| DP + PP + EP |    8 |   2 |   2 |   2 |               40 |    1,578.4 |        12.976 |      2,048,000 |
+
+The 2- and 4-GPU means cover steps 50–199. The 8-GPU means cover steps 50–99. The 8-GPU experiments used RTX 3060 GPUs and 16 experts; the 2- and 4-GPU experiments used RTX 3090 GPUs and 20 experts.
