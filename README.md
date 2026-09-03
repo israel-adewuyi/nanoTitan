@@ -86,6 +86,12 @@ dataset_path = "data/tinystories_seq768.pt"
 
 The cached sequence length must match `model.max_seq_len`.
 
+Launch a distributed trainig job on 4 GPUs
+
+```
+uv run torchrun --standalone --nnodes=1 --nproc-per-node=4 -m src.train big_sabaka.toml
+```
+
 ## Testing
 
 ### CPU-compatible tests
@@ -173,33 +179,33 @@ For the swept PP experiments, the selected runs use the default 1F1B schedule wi
 
 #### 2 GPUs
 
-| Mode                    | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) | Tokens trained |
-| ----------------------- | ---: | --: | --: | --: | ---------------: | ---------: | ------------: | -------------: |
-| DP                      |    2 |   2 |   1 |   1 |               42 |    2,665.9 |         8.066 |      4,300,800 |
-| PP · 1F1B · AC on · M=7 |    2 |   1 |   2 |   1 |               42 |    2,155.1 |         9.979 |      4,300,800 |
-| EP                      |    2 |   1 |   1 |   2 |               42 |    2,638.8 |         8.150 |      4,300,800 |
+| Mode                    | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) |
+| ----------------------- | ---: | --: | --: | --: | ---------------: | ---------: | ------------: |
+| DP                      |    2 |   2 |   1 |   1 |               42 |    2,665.9 |         8.066 |
+| PP · 1F1B · AC on · M=7 |    2 |   1 |   2 |   1 |               42 |    2,155.1 |         9.979 |
+| EP                      |    2 |   1 |   1 |   2 |               42 |    2,638.8 |         8.150 |
 
 #### 4 GPUs
 
-| Mode                     | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) | Tokens trained |
-| ------------------------ | ---: | --: | --: | --: | ---------------: | ---------: | ------------: | -------------: |
-| DP                       |    4 |   4 |   1 |   1 |               84 |    6,046.5 |         7.114 |      8,601,600 |
-| PP · 1F1B · AC on · M=12 |    4 |   1 |   4 |   1 |               84 |    3,343.6 |        12.877 |      8,601,600 |
-| EP                       |    4 |   1 |   1 |   4 |               84 |    5,102.8 |         8.430 |      8,601,600 |
-| DP + PP                  |    4 |   2 |   2 |   1 |               84 |    3,186.8 |        13.496 |      8,601,600 |
-| DP + EP                  |    4 |   2 |   1 |   2 |               84 |    5,439.6 |         7.908 |      8,601,600 |
-| PP + EP                  |    4 |   1 |   2 |   2 |               84 |    3,133.3 |        13.770 |      8,601,600 |
+| Mode                     | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) |
+| ------------------------ | ---: | --: | --: | --: | ---------------: | ---------: | ------------: |
+| DP                       |    4 |   4 |   1 |   1 |               84 |    6,046.5 |         7.114 |
+| PP · 1F1B · AC on · M=12 |    4 |   1 |   4 |   1 |               84 |    3,343.6 |        12.877 |
+| EP                       |    4 |   1 |   1 |   4 |               84 |    5,102.8 |         8.430 |
+| DP + PP                  |    4 |   2 |   2 |   1 |               84 |    3,186.8 |        13.496 |
+| DP + EP                  |    4 |   2 |   1 |   2 |               84 |    5,439.6 |         7.908 |
+| PP + EP                  |    4 |   1 |   2 |   2 |               84 |    3,133.3 |        13.770 |
 
 #### 8 GPUs
 
-| Mode         | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) | Tokens trained |
-| ------------ | ---: | --: | --: | --: | ---------------: | ---------: | ------------: | -------------: |
-| DP           |    8 |   8 |   1 |   1 |               40 |    3,674.2 |         5.574 |      2,048,000 |
-| PP           |    8 |   1 |   8 |   1 |               40 |    2,228.2 |         9.191 |      2,048,000 |
-| EP           |    8 |   1 |   1 |   8 |               40 |    3,203.4 |         6.393 |      2,048,000 |
-| DP + PP      |    8 |   2 |   4 |   1 |               40 |    1,728.0 |        11.852 |      2,048,000 |
-| DP + EP      |    8 |   4 |   1 |   2 |               40 |    3,546.9 |         5.774 |      2,048,000 |
-| PP + EP      |    8 |   1 |   4 |   2 |               40 |    1,606.7 |        12.748 |      2,048,000 |
-| DP + PP + EP |    8 |   2 |   2 |   2 |               40 |    1,578.4 |        12.976 |      2,048,000 |
+| Mode         | GPUs |  DP |  PP |  EP | Total batch size | Tokens/sec | Step time (s) |
+| ------------ | ---: | --: | --: | --: | ---------------: | ---------: | ------------: |
+| DP           |    8 |   8 |   1 |   1 |               40 |    3,674.2 |         5.574 |
+| PP           |    8 |   1 |   8 |   1 |               40 |    2,228.2 |         9.191 |
+| EP           |    8 |   1 |   1 |   8 |               40 |    3,203.4 |         6.393 |
+| DP + PP      |    8 |   2 |   4 |   1 |               40 |    1,728.0 |        11.852 |
+| DP + EP      |    8 |   4 |   1 |   2 |               40 |    3,546.9 |         5.774 |
+| PP + EP      |    8 |   1 |   4 |   2 |               40 |    1,606.7 |        12.748 |
+| DP + PP + EP |    8 |   2 |   2 |   2 |               40 |    1,578.4 |        12.976 |
 
 The 2- and 4-GPU means cover steps 50–199. The 8-GPU means cover steps 50–99. The 8-GPU experiments used RTX 3060 GPUs and 16 experts; the 2- and 4-GPU experiments used RTX 3090 GPUs and 20 experts.
