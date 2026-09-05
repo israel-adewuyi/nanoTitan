@@ -78,14 +78,11 @@ def test_moe_output_shape():
 )
 def test_moe_max_vio_is_scalar_relative_overload(counts, top_k, expected):
     cfg = make_test_config(top_k=top_k)
-    num_tokens = sum(counts) // top_k
-    logits = torch.zeros(num_tokens, cfg.num_experts, requires_grad=True)
-    stats = MoELayerStats(torch.tensor(counts), logits.softmax(dim=-1), cfg)
+    stats = MoELayerStats(tokens_per_expert=torch.tensor(counts), cfg=cfg)
 
     assert stats.max_vio.ndim == 0
     assert stats.max_vio.item() == pytest.approx(expected)
     assert not stats.max_vio.requires_grad
-    assert stats.aux_loss.requires_grad
 
 
 def test_capacity_routing_reports_raw_counts_for_aux_loss():

@@ -4,13 +4,14 @@ import torch.nn as nn
 from torch.profiler import record_function
 
 from src.config import ModelConfig
+from src.model.cuda_extension import get_cuda_extension
 from src.model.moe_ops import (
     combine_tokens_fn,
     pack_tokens_fn,
     permute_expert_assignment_fn,
     torch_backend_all_to_all,
 )
-from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
+from src.model.utils import ModelShardSpec, MoELayerStats
 
 
 class CUDAMoEBackend:
@@ -22,7 +23,9 @@ class CUDAMoEBackend:
         self.router = router
         self.experts = experts
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, MoELayerStats]:
+    def forward(
+        self, x: torch.Tensor, expert_bias: torch.Tensor
+    ) -> tuple[torch.Tensor, MoELayerStats, torch.Tensor]:
         batch, seq_len, d_model = x.shape
         num_tokens = batch * seq_len
         # flatten residual stream tokens into a 2D tensor of shape (num_tokens, d_model)
@@ -35,20 +38,25 @@ class CUDAMoEBackend:
                 flat_tokens.to(router_dtype)
             )  # cast to fp32 (or whatever dtype router is)
 
+        # This implementation only works for 1x DP i.e assumption that per_rank_expert == num_experts.
         with record_function("moe/topK"):
-            expert_weights, topk_expert_idx, expert_count, raw_expert_count = topk_with_capacity(
-                expert_logits,
-                top_k=self.cfg.top_k,
-                capacity_factor=self.cfg.capacity_factor,
-            )
-
-        # Load balancing trains the router without directly shaping the residual stream.
-        moe_aux_logits = self.router(flat_tokens.detach().to(router_dtype))
-        moe_aux_probs = moe_aux_logits.softmax(dim=-1)
+            affinity_scores = expert_logits.sigmoid()
+            topk_expert_idx = (
+                (affinity_scores + expert_bias).topk(self.cfg.top_k, dim=-1).indices
+            )  # [N, K]
+            weights = affinity_scores.gather(dim=-1, index=topk_expert_idx)  # [N, K]
+            expert_weights = weights / weights.sum(dim=-1, keepdim=True)  # [N, K]
 
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
         with record_function("moe/count_expert"):
+            mask = torch.ones(num_tokens, device=x.device, dtype=torch.int32)
+
+            # Lazily import cuda extension
+            nanotitan_cuda = get_cuda_extension()
+            expert_count = nanotitan_cuda.count_expert_kernel(
+                topk_expert_idx.to(torch.int32), mask, self.cfg.num_experts, self.cfg.top_k
+            )
             expert_offsets = torch.empty(
                 self.cfg.num_experts + 1, device=x.device, dtype=torch.int32
             )
@@ -60,7 +68,7 @@ class CUDAMoEBackend:
             packed_X, packed_tokenId, _, packed_topk_weights = pack_tokens_fn(
                 flat_tokens,
                 expert_weights,
-                topk_expert_idx,
+                topk_expert_idx.to(torch.int32),
                 expert_offsets_cpy,
             )
 
@@ -120,9 +128,14 @@ class CUDAMoEBackend:
             ).to(dtype=returned_outputs.dtype)
 
         moe_stats = MoELayerStats(
-            tokens_per_expert=raw_expert_count.detach(),
-            probs_per_expert=moe_aux_probs,
+            tokens_per_expert=expert_count.detach(),
             cfg=self.cfg,
         )
 
-        return (pool.reshape(batch, seq_len, d_model), moe_stats)
+        # Adjust the bias in case some experts were overloaded/underloaded
+        with torch.no_grad():
+            counts = expert_count.float()
+            optimal_load = counts.mean()
+            expert_bias = expert_bias + 0.001 * (optimal_load - counts).sign()
+
+        return (pool.reshape(batch, seq_len, d_model), moe_stats, expert_bias)

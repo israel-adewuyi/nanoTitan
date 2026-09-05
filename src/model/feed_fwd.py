@@ -136,6 +136,10 @@ class MoE(nn.Module):
         self.router = nn.Linear(
             self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.moe_router_dtype
         )
+        self.register_buffer(
+            "expert_bias", torch.zeros((self.spec.per_rank_expert), dtype=torch.float32)
+        )
+
         if cfg.moe_backend == "cuda":
             self.moe_backend = CUDAMoEBackend(cfg, self.experts, self.router, spec)
         else:
@@ -147,4 +151,7 @@ class MoE(nn.Module):
         return router_params + self.cfg.top_k * (expert_params / self.cfg.num_experts)
 
     def forward(self, x: Float[torch.Tensor, "batch seq_len d_model"]) -> tuple:
-        return self.moe_backend.forward(x)
+        x, moe_stats, expert_bias = self.moe_backend.forward(x, self.expert_bias)
+        if self.training:
+            self.expert_bias = expert_bias
+        return (x, moe_stats)

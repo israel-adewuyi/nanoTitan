@@ -24,7 +24,6 @@ class MicrobatchState:
     input: torch.Tensor
     output: torch.Tensor
     ce_loss: torch.Tensor | None
-    aux_loss: torch.Tensor
 
 
 class PipelineParallel:
@@ -82,10 +81,6 @@ class PipelineParallel:
                 (sum(ce_losses) / self.cfg.runtime.num_microbatches).item()
                 if self.dim.is_pp_last_stage
                 else 0.0,
-                reduce="sum",
-            ),
-            "train/lb_loss": ScalarMetric(
-                (sum(self.moe_aux_losses) / self.cfg.runtime.num_microbatches).item(),
                 reduce="sum",
             ),
             "train/grad_norm": ScalarMetric(grad_norm.item(), reduce="none"),
@@ -163,7 +158,6 @@ class PipelineParallel:
         else:
             stage_output, moe_stats = model(stage_input)
 
-        aux_loss = torch.stack([stats.aux_loss for stats in moe_stats]).mean() / self.dim.pp_size
         ce_loss = None
         if self.dim.is_pp_last_stage:
             target = target.to(self.device)
@@ -175,10 +169,8 @@ class PipelineParallel:
             input=stage_input,
             output=stage_output,
             ce_loss=ce_loss,
-            aux_loss=aux_loss,
         )
         self.ce_losses.append(None if ce_loss is None else ce_loss.detach())
-        self.moe_aux_losses.append(aux_loss.detach())
         self.moe_route_counts.append([stats.tokens_per_expert.detach() for stats in moe_stats])
         return stage_output
 
@@ -187,13 +179,10 @@ class PipelineParallel:
             reducer.backward_grad_sync = sync_gradients
 
         state = self.microbatch_states.pop(microbatch_id)
-        aux_loss = state.aux_loss / self.cfg.runtime.num_microbatches
         if self.dim.is_pp_last_stage:
-            torch.autograd.backward([state.ce_loss / self.cfg.runtime.num_microbatches, aux_loss])
+            torch.autograd.backward([state.ce_loss / self.cfg.runtime.num_microbatches])
         else:
-            torch.autograd.backward(
-                [state.output, aux_loss], [output_grad, torch.ones_like(aux_loss)]
-            )
+            torch.autograd.backward([state.output], [output_grad])
 
         return None if self.dim.is_pp_first_stage else state.input.grad
 

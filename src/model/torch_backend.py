@@ -7,7 +7,7 @@ from torch.profiler import record_function
 
 from src.config import ModelConfig
 from src.model.moe_ops import torch_backend_all_to_all
-from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
+from src.model.utils import ModelShardSpec, MoELayerStats
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ class TorchMoEBackend:
     def forward(
         self,
         x: torch.Tensor,
+        expert_bias: torch.Tensor,
     ):
         batch, seq_len, d_model = x.shape
         # flatten residual stream tokens into a 2D tensor of shape (num_tokens, d_model)
@@ -35,15 +36,12 @@ class TorchMoEBackend:
             expert_logits = self.router(flat_tokens.to(router_dtype))
 
         with record_function("moe/topK"):
-            expert_weights, topk_expert_idx, expert_count, raw_expert_count = topk_with_capacity(
-                expert_logits,
-                top_k=self.cfg.top_k,
-                capacity_factor=self.cfg.capacity_factor,
-            )
+            affinity_scores = expert_logits.sigmoid()
+            topk_expert_idx = (affinity_scores + expert_bias).topk(self.cfg.top_k, dim=-1).indices
+            weights = affinity_scores.gather(dim=-1, index=topk_expert_idx)
+            expert_weights = weights / weights.sum(dim=-1, keepdim=True)
 
-        # Load balancing trains the router without directly shaping the residual stream.
-        moe_aux_logits = self.router(flat_tokens.detach().to(router_dtype))
-        moe_aux_probs = moe_aux_logits.softmax(dim=-1)
+        expert_count = torch.bincount(topk_expert_idx.flatten(), minlength=self.cfg.num_experts)
 
         assert expert_weights.dtype == torch.float32, "Expert topk weights should be in fp32"
 
@@ -145,8 +143,11 @@ class TorchMoEBackend:
         weighted_outputs = (returned_outputs * packed_weights.unsqueeze(1)).to(pool.dtype)
         pool.index_add_(0, packed_token_ids, weighted_outputs)
 
-        moe_stats = MoELayerStats(
-            raw_expert_count.detach(), probs_per_expert=moe_aux_probs, cfg=self.cfg
-        )
+        moe_stats = MoELayerStats(tokens_per_expert=expert_count.detach(), cfg=self.cfg)
 
-        return (pool.reshape(batch, seq_len, d_model), moe_stats)
+        with torch.no_grad():
+            counts = expert_count.float()
+            optimal_load = counts.mean()
+            expert_bias = expert_bias + 0.001 * (optimal_load - counts).sign()
+
+        return (pool.reshape(batch, seq_len, d_model), moe_stats, expert_bias)

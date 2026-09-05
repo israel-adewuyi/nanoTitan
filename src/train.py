@@ -246,19 +246,15 @@ def main() -> None:
                     metrics["train/tokens_per_step"] / metrics["time/step_time"]
                 )
                 metrics["train/ce_loss"] = metrics["train/ce_loss"] / (dims.dp_size * dims.ep_size)
-                metrics["train/lb_loss"] = metrics["train/lb_loss"] / (dims.dp_size * dims.ep_size)
-                metrics.update(
-                    {"train/total_loss": metrics["train/ce_loss"] + metrics["train/lb_loss"]}
-                )
+
                 # Log metrics to tensorboard on rank 0
                 if dims.local_rank == 0:
                     logger.log(
                         SUCCESS,
-                        "Step %s | rank=%s | ce_loss=%.6f | lb_loss=%.6f | max_vio=%.4f | grad_norm=%.4f",
+                        "Step %s | rank=%s | ce_loss=%.6f | max_vio=%.4f | grad_norm=%.4f",
                         iter + 1,
                         dims.global_rank,
                         metrics["train/ce_loss"],
-                        metrics["train/lb_loss"],
                         metrics["moe/max_vio"],
                         metrics["train/grad_norm"],
                     )
