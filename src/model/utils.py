@@ -68,6 +68,17 @@ def get_model_shard_specs(dim: ParallelDims, cfg: AppConfig):
     return spec
 
 
+@torch.no_grad()
+def max_violation(tokens_per_expert: torch.Tensor) -> torch.Tensor:
+    """
+    Metric to measure the degree of load imbalance in a MoE layer
+    https://arxiv.org/pdf/2408.15664
+    """
+    counts = tokens_per_expert.float()
+    optimal_load = counts.mean(dim=-1)
+    return (counts.amax(dim=-1) - optimal_load) / optimal_load
+
+
 @dataclass
 class MoELayerStats:
     tokens_per_expert: torch.Tensor
@@ -86,6 +97,8 @@ class MoELayerStats:
 
         assert self.ass_frac_per_expert.shape == self.probs_per_expert.shape
         assert self.ass_frac_per_expert.ndim == 1
+
+        self.max_vio = max_violation(self.tokens_per_expert)
 
         self.aux_loss = (
             self.cfg.router_alpha

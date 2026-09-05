@@ -11,6 +11,7 @@ from torch.utils.checkpoint import checkpoint
 from src.config import AppConfig
 from src.metrics import HistogramMetric, ScalarMetric
 from src.model.model import NanoTitanModel
+from src.model.utils import max_violation
 from src.parallel.pp_schedules import get_pipeline_schedule
 from src.parallel_dims import ParallelDims
 from src.utils import clip_gradients, compute_grad_norm
@@ -107,7 +108,7 @@ class PipelineParallel:
                 reduce="max",
             ),
         }
-        metrics.update(self._moe_route_fraction_metrics(model, self.moe_route_counts))
+        metrics.update(self._moe_metrics(model, self.moe_route_counts))
 
         return metrics
 
@@ -247,25 +248,33 @@ class PipelineParallel:
             work.wait()
         return stage_input
 
-    def _moe_route_fraction_metrics(
+    def _moe_metrics(
         self, model: NanoTitanModel, moe_route_counts
     ) -> dict[str, ScalarMetric | HistogramMetric]:
         metrics = {}
         local_layer_fracs = {}
+        max_vio_sum = 0.0
 
         if moe_route_counts and moe_route_counts[0]:
-            num_local_layers = len(moe_route_counts[0])
-            for local_layer_idx in range(num_local_layers):
-                counts = torch.stack(
-                    [
-                        microbatch_counts[local_layer_idx].float()
-                        for microbatch_counts in moe_route_counts
-                    ],
-                    dim=0,
-                ).sum(dim=0)
+            # Raw top-k counts, before capacity rerouting: [local layers, experts].
+            layer_counts = torch.stack(
+                [torch.stack(microbatch_counts) for microbatch_counts in moe_route_counts]
+            ).sum(dim=0)
+            if self.dim.data_world_size > 1:
+                dist.all_reduce(layer_counts, op=dist.ReduceOp.SUM, group=self.dim.shared_dp_group)
+
+            # Max is nonlinear: pool the training batch before measuring each layer.
+            max_vio_sum = max_violation(layer_counts).sum().item()
+            for local_layer_idx, counts in enumerate(layer_counts.float()):
                 frac = counts / counts.sum().clamp_min(1.0)
                 global_layer_idx = model.spec.layer_start + local_layer_idx
                 local_layer_fracs[global_layer_idx] = frac.detach().cpu()
+
+        # World SUM combines PP stages; DP/EP ranks hold duplicate pooled counts.
+        metrics["moe/max_vio"] = ScalarMetric(
+            max_vio_sum / (self.cfg.model.n_layers * self.dim.data_world_size),
+            reduce="sum",
+        )
 
         for layer_idx in range(self.cfg.model.n_layers):
             frac = local_layer_fracs.get(layer_idx)

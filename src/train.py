@@ -254,11 +254,12 @@ def main() -> None:
                 if dims.local_rank == 0:
                     logger.log(
                         SUCCESS,
-                        "Step %s | rank=%s | ce_loss=%.6f | lb_loss=%.6f | grad_norm=%.4f",
+                        "Step %s | rank=%s | ce_loss=%.6f | lb_loss=%.6f | max_vio=%.4f | grad_norm=%.4f",
                         iter + 1,
                         dims.global_rank,
                         metrics["train/ce_loss"],
                         metrics["train/lb_loss"],
+                        metrics["moe/max_vio"],
                         metrics["train/grad_norm"],
                     )
                     metrics_logger.log(step=iter, metrics=metrics)

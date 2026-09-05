@@ -4,7 +4,7 @@ import torch
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
 from src.model.model import NanoTitanModel
-from src.model.utils import ModelShardSpec, topk_with_capacity
+from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
 from src.utils import resolve_dtype
 
 
@@ -66,6 +66,28 @@ def test_moe_output_shape():
     assert y.shape == x.shape
 
 
+@pytest.mark.parametrize(
+    ("counts", "top_k", "expected"),
+    [
+        ([2, 2, 2, 2], 2, 0.0),
+        ([3, 3, 1, 1], 2, 0.5),
+        ([4, 4, 0, 0], 2, 1.0),
+        ([4, 0, 0, 0], 1, 3.0),
+        ([1, 0, 0, 0], 1, 3.0),
+    ],
+)
+def test_moe_max_vio_is_scalar_relative_overload(counts, top_k, expected):
+    cfg = make_test_config(top_k=top_k)
+    num_tokens = sum(counts) // top_k
+    logits = torch.zeros(num_tokens, cfg.num_experts, requires_grad=True)
+    stats = MoELayerStats(torch.tensor(counts), logits.softmax(dim=-1), cfg)
+
+    assert stats.max_vio.ndim == 0
+    assert stats.max_vio.item() == pytest.approx(expected)
+    assert not stats.max_vio.requires_grad
+    assert stats.aux_loss.requires_grad
+
+
 def test_capacity_routing_reports_raw_counts_for_aux_loss():
     cfg = make_test_config(d_model=4, num_experts=4, top_k=1)
     cfg.capacity_factor = 1.0
@@ -81,6 +103,7 @@ def test_capacity_routing_reports_raw_counts_for_aux_loss():
         stats.tokens_per_expert,
         torch.tensor([4, 0, 0, 0], dtype=stats.tokens_per_expert.dtype),
     )
+    assert stats.max_vio.item() == pytest.approx(3.0)
 
 
 def test_capacity_routing_normalizes_selected_logits_without_nan():
@@ -133,6 +156,7 @@ def test_cuda_moe_matches_torch_forward_and_backward():
     )
     torch.testing.assert_close(stats_cuda.probs_per_expert, stats_torch.probs_per_expert)
     torch.testing.assert_close(stats_cuda.aux_loss, stats_torch.aux_loss)
+    torch.testing.assert_close(stats_cuda.max_vio, stats_torch.max_vio)
 
     out_grad = torch.linspace(-1, 1, out_torch.numel(), device="cuda").reshape_as(out_torch)
     ((out_torch * out_grad).sum() + stats_torch.aux_loss).backward()
