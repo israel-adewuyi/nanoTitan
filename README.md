@@ -92,6 +92,10 @@ Launch a distributed trainig job on 4 GPUs
 uv run torchrun --standalone --nnodes=1 --nproc-per-node=4 -m src.train big_sabaka.toml
 ```
 
+Training log messages go to both the terminal and `runs/<run_name>/logs/rank-<rank>.log`.
+Each distributed rank writes its own file. Files contain plain text and append when you reuse
+the same run name. `--log.level` controls the verbosity of both outputs.
+
 ## Testing
 
 ### CPU-compatible tests

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import time
 from itertools import islice
+from pathlib import Path
 
 import torch
 import torch.distributed as dist
@@ -120,10 +122,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    setup_logging(args.log_level)
 
     # get configs, run sanity checks for device mesh
     cfg = load_run_config(args.config)
+    log_dir = Path("runs") / cfg.run_name / "logs"
+    rank = int(os.environ.get("RANK", "0"))
+    log_file = log_dir / f"rank-{rank}.log"
+    setup_logging(args.log_level, log_file=log_file)
+    logger.info("Writing logs to %s", log_file)
     init_distributed()
     world_size = get_world_size()
     assert world_size == cfg.runtime.dp_size * cfg.runtime.pp_size * cfg.runtime.ep_size

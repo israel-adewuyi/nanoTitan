@@ -38,15 +38,24 @@ class ColorFormatter(logging.Formatter):
             record.levelname = levelname
 
 
-def setup_logging(level: str = "INFO") -> None:
+def setup_logging(level: str = "INFO", log_file: str | Path | None = None) -> None:
+    log_format = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     handler = logging.StreamHandler(sys.stderr)
-    formatter = ColorFormatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    formatter = ColorFormatter(log_format)
     if not sys.stderr.isatty():
         formatter.COLORS = {}
     handler.setFormatter(formatter)
+    handlers = [handler]
+    if log_file is not None:
+        log_file = Path(log_file)
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+        file_handler.setFormatter(logging.Formatter(log_format))
+        handlers.append(file_handler)
+
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
-        handlers=[handler],
+        handlers=handlers,
         force=True,
     )
 
