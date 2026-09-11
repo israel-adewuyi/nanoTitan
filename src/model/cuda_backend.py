@@ -134,8 +134,9 @@ class CUDAMoEBackend:
 
         # Adjust the bias in case some experts were overloaded/underloaded
         with torch.no_grad():
+            dist.all_reduce(expert_count, op=dist.ReduceOp.SUM, group=self.spec.non_expert_dp_group)
             counts = expert_count.float()
             optimal_load = counts.mean()
-            expert_bias = expert_bias + 0.001 * (optimal_load - counts).sign()
+            expert_bias = expert_bias + self.cfg.moe_bias_coef * (optimal_load - counts).sign()
 
         return (pool.reshape(batch, seq_len, d_model), moe_stats, expert_bias)

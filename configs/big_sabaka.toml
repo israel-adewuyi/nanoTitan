@@ -15,6 +15,7 @@ router_alpha = 0.01
 capacity_factor = 1.25
 moe_backend = "cuda"
 dtype = "bfloat16"
+moe_bias_coef = 0.001
 
 [trainer]
 seed = 42

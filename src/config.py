@@ -111,6 +111,7 @@ class ModelConfig(BaseModel):
     dtype: DTypeName = "float32"
     moe_router_dtype: DTypeName = "float32"
     router_alpha: float
+    moe_bias_coef: float
 
     @model_validator(mode="after")
     def validate_embedding_compatibility(self) -> ModelConfig:

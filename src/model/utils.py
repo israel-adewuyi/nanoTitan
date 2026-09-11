@@ -20,6 +20,7 @@ class ModelShardSpec:
     end_expert_id: int
     ep_size: int = 1
     ep_group: ProcessGroup | None = None
+    non_expert_dp_group: ProcessGroup | None = None
 
 
 def get_layer_bounds(cfg: AppConfig, pp_rank: int):
@@ -63,6 +64,7 @@ def get_model_shard_specs(dim: ParallelDims, cfg: AppConfig):
         end_expert_id=end_expert_id,
         ep_size=dim.ep_size,
         ep_group=dim.ep_group,
+        non_expert_dp_group=dim.shared_dp_group,
     )
 
     return spec
