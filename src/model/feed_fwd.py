@@ -137,7 +137,7 @@ class MoE(nn.Module):
             self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.moe_router_dtype
         )
         self.register_buffer(
-            "expert_bias", torch.zeros((self.spec.per_rank_expert), dtype=torch.float32)
+            "expert_bias", torch.zeros((self.cfg.num_experts), dtype=torch.float32)
         )
 
         if cfg.moe_backend == "cuda":
