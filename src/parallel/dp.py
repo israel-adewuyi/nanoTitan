@@ -32,9 +32,9 @@ class DataParallel:
 
         groups = model.parameter_sync_groups()
         self.broadcast_parameters(
-            params=groups["shared"],
-            src_rank=self.dims.shared_dp_group_ranks[0],
-            group=self.dims.shared_dp_group,
+            params=groups["non_expert"],
+            src_rank=self.dims.non_expert_dp_group_ranks[0],
+            group=self.dims.non_expert_dp_group,
         )
 
         self.broadcast_parameters(
@@ -43,10 +43,10 @@ class DataParallel:
             group=self.dims.expert_dp_group,
         )
 
-        self.shared_reducer = ReducerV1(
-            groups["shared"],
-            len(self.dims.shared_dp_group_ranks),
-            self.dims.shared_dp_group,
+        self.non_expert_reducer = ReducerV1(
+            groups["non_expert"],
+            len(self.dims.non_expert_dp_group_ranks),
+            self.dims.non_expert_dp_group,
             self.cfg.runtime.bucket_size,
         )
         self.expert_reducer = ReducerV1(
@@ -68,11 +68,11 @@ class DataParallel:
                 dist.broadcast(param, src=src_rank, group=group, async_op=async_op)
 
     def finalize_backward(self):
-        self.shared_reducer.finalize_backward()
+        self.non_expert_reducer.finalize_backward()
         self.expert_reducer.finalize_backward()
 
     def get_reducers(self) -> dict:
-        return {"shared": self.shared_reducer, "expert": self.expert_reducer}
+        return {"non_expert": self.non_expert_reducer, "expert": self.expert_reducer}
 
     def prepare_trainloader(self, train_dataset: PackedTokenDataset):
         train_loader = DataLoader(

@@ -63,12 +63,12 @@ class ParallelDims:
                 if self.dp_rank == dp and self.ep_rank == ep:
                     self.pp_group = group
 
-        self.shared_dp_group_ranks = [
+        self.non_expert_dp_group_ranks = [
             ((dp * self.pp_size) + self.pp_rank) * self.ep_size + ep
             for dp in range(self.dp_size)
             for ep in range(self.ep_size)
         ]
-        self.shared_dp_group = None
+        self.non_expert_dp_group = None
         for pp in range(self.pp_size):
             ranks = [
                 ((dp * self.pp_size) + pp) * self.ep_size + ep
@@ -78,7 +78,7 @@ class ParallelDims:
             group = dist.new_group(ranks=ranks)
 
             if self.pp_rank == pp:
-                self.shared_dp_group = group
+                self.non_expert_dp_group = group
 
         self.expert_dp_group_ranks = [
             ((dp * self.pp_size) + self.pp_rank) * self.ep_size + self.ep_rank
@@ -101,7 +101,7 @@ class ParallelDims:
     def __repr__(self):
         return f"""ParallelDim(ep_group_rank={self.ep_group_ranks}\n
             pp_group_ranks={self.pp_group_ranks}\n
-            shared_dp_group_rank={self.shared_dp_group_ranks}\n
+            non_expert_dp_group_rank={self.non_expert_dp_group_ranks}\n
             self.expert_dp_group_rank={self.expert_dp_group_ranks})"""
 
 

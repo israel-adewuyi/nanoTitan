@@ -248,13 +248,13 @@ class NanoTitanModel(nn.Module):
         )
         expert_ids = {id(param) for param in expert_params}
 
-        shared_params = tuple(
+        non_expert_params = tuple(
             param
             for param in self.parameters()
             if param.requires_grad and id(param) not in expert_ids
         )
 
-        return {"shared": shared_params, "expert": expert_params}
+        return {"non_expert": non_expert_params, "expert": expert_params}
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[MoELayerStats]]:
         moe_stats = []

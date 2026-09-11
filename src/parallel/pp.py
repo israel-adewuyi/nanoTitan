@@ -250,7 +250,9 @@ class PipelineParallel:
                 [torch.stack(microbatch_counts) for microbatch_counts in moe_route_counts]
             ).sum(dim=0)
             if self.dim.data_world_size > 1:
-                dist.all_reduce(layer_counts, op=dist.ReduceOp.SUM, group=self.dim.shared_dp_group)
+                dist.all_reduce(
+                    layer_counts, op=dist.ReduceOp.SUM, group=self.dim.non_expert_dp_group
+                )
 
             # Max is nonlinear: pool the training batch before measuring each layer.
             max_vio_sum = max_violation(layer_counts).sum().item()
