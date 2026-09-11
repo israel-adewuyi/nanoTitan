@@ -36,9 +36,10 @@ lr = "5e-4"
 num_microbatches = 1
 pipeline_schedule = "gpipe"
 activation_checkpointing = false
-bucket_size = 150
+bucket_size = 64
 dp_size = 1
 pp_size = 1
+ep_size = 1
 
 [profiler]
 enabled = false

@@ -267,15 +267,6 @@ class PipelineParallel:
             reduce="sum",
         )
 
-        for layer_idx in range(self.cfg.model.n_layers):
-            frac = local_layer_fracs.get(layer_idx)
-            hist_value = torch.zeros(self.cfg.model.num_experts, dtype=torch.float32)
-            if frac is not None:
-                hist_value = frac / self.dim.data_world_size
-            metrics[f"moe/layer_{layer_idx:02d}/route_frac_dist"] = HistogramMetric(
-                hist_value, reduce="sum"
-            )
-
         return metrics
 
     def finalize_backward(self):
