@@ -30,6 +30,7 @@ def _make_config() -> ModelConfig:
         dtype="float32",
         moe_router_dtype="float32",
         router_alpha=0.01,
+        moe_bias_coef=0.001,
     )
     cfg.dtype = resolve_dtype(cfg.dtype)
     cfg.moe_router_dtype = resolve_dtype(cfg.moe_router_dtype)

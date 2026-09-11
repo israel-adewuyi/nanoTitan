@@ -21,6 +21,7 @@ def make_test_config(d_model=8, num_experts=4, top_k=2, moe_backend="torch"):
         ffn_in=2 * d_model,
         moe_backend=moe_backend,
         router_alpha=0.01,
+        moe_bias_coef=0.001,
     )
     cfg.dtype = resolve_dtype(cfg.dtype)
     cfg.moe_router_dtype = resolve_dtype(cfg.moe_router_dtype)
@@ -215,11 +216,11 @@ def test_parameter_sync_groups_handle_pipeline_boundary_blocks():
     model = NanoTitanModel(cfg, spec)
 
     groups = model.parameter_sync_groups()
-    shared_ids = {id(param) for param in groups["shared"]}
+    non_expert_ids = {id(param) for param in groups["non_expert"]}
     expert_ids = {id(param) for param in groups["expert"]}
     trainable_ids = {id(param) for param in model.parameters() if param.requires_grad}
 
-    assert shared_ids
+    assert non_expert_ids
     assert expert_ids
-    assert shared_ids.isdisjoint(expert_ids)
-    assert shared_ids | expert_ids == trainable_ids
+    assert non_expert_ids.isdisjoint(expert_ids)
+    assert non_expert_ids | expert_ids == trainable_ids

@@ -24,6 +24,8 @@ def make_cfg(args, backend, dtype):
         moe_backend=backend,
         dtype=dtype,
         moe_router_dtype="float32",
+        router_alpha=0.01,
+        moe_bias_coef=0.001,
     )
     cfg.dtype = getattr(torch, dtype)
     cfg.moe_router_dtype = torch.float32

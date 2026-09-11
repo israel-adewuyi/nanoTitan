@@ -184,14 +184,14 @@ def main() -> None:
         val_loader = dp.prepare_valloader(val_dataset)
 
     parameter_groups = model.parameter_sync_groups()
-    shared_params = sum(param.numel() for param in parameter_groups["shared"])
+    non_expert_params = sum(param.numel() for param in parameter_groups["non_expert"])
     expert_params = sum(param.numel() for param in parameter_groups["expert"])
 
     if dims.dp_rank == 0:
-        shared_params = shared_params if dims.ep_rank == 0 else 0
-        local_total_params = shared_params + expert_params
+        non_expert_params = non_expert_params if dims.ep_rank == 0 else 0
+        local_total_params = non_expert_params + expert_params
         local_active_params = (
-            shared_params + expert_params * cfg.model.top_k / cfg.model.num_experts
+            non_expert_params + expert_params * cfg.model.top_k / cfg.model.num_experts
         )
     else:
         local_total_params = local_active_params = 0

@@ -13,6 +13,7 @@ num_experts = 16
 top_k = 2
 capacity_factor = 1.25
 router_alpha = 0.01
+moe_bias_coef = 0.001
 moe_backend = "cuda"
 dtype = "float32"
 
