@@ -40,8 +40,8 @@ class PipelineComms:
         self, outgoing_tensor: torch.Tensor, incoming_tensor: torch.Tensor, dest_rank: int
     ) -> torch.Tensor:
         ops = [
-            dist.P2POp(dist.isend, outgoing_tensor, dest_rank, self.dim.pp_group),
-            dist.P2POp(dist.irecv, incoming_tensor, dest_rank, self.dim.pp_group),
+            dist.P2POp(dist.isend, outgoing_tensor, dest_rank, self.pp_group),
+            dist.P2POp(dist.irecv, incoming_tensor, dest_rank, self.pp_group),
         ]
         for work in dist.batch_isend_irecv(ops):
             work.wait()

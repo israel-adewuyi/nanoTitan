@@ -158,14 +158,18 @@ def test_two_stage_pp_forward_backward_matches_reference(two_ranks, dtype):
     pipeline.ce_losses = []
     pipeline.moe_aux_losses = []
     pipeline.moe_route_counts = []
-    stage_input = x if dims.is_pp_first_stage else pipeline.comms.recv_forward(0)
+    stage_input = (
+        x
+        if dims.is_pp_first_stage
+        else pipeline.comms.recv_forward(0, pipeline._activation_buffer())
+    )
     output = pipeline.forward_microbatch(0, model, stage_input, targets)
     if dims.is_pp_last_stage:
         input_grad = pipeline.backward_microbatch(0)
         pipeline.comms.send_backward(0, input_grad)
     else:
         pipeline.comms.send_forward(0, output)
-        output_grad = pipeline.comms.recv_backward(0)
+        output_grad = pipeline.comms.recv_backward(0, torch.empty_like(output))
         pipeline.backward_microbatch(0, output_grad)
 
     assert output.dtype == dtype
