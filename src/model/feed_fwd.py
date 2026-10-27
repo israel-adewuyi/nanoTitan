@@ -36,8 +36,8 @@ class FFN(nn.Module):
         return sum(param.numel() for param in self.parameters())
 
 
-class ExpertFFN(nn.Module):
-    """Feedforward network implementation"""
+class ExpertsFFN(nn.Module):
+    """Experts block implementation"""
 
     def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
         super().__init__()

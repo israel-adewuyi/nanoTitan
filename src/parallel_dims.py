@@ -16,9 +16,10 @@ class ParallelDims:
         self.dp_size = config.dp_size
         self.pp_size = config.pp_size
         self.ep_size = config.ep_size
+        self.tp_size = config.tp_size
         self.num_experts = config.num_expert
 
-        assert self.pp_size * self.dp_size * self.ep_size == self.world_size
+        assert self.pp_size * self.dp_size * self.ep_size * self.tp_size == self.world_size
         assert self.num_experts % self.ep_size == 0, (
             "Number of experts should be divisible by the size of expert group"
         )
@@ -97,6 +98,9 @@ class ParallelDims:
 
         self.prev_pp_rank = -1 if self.is_pp_first_stage else self.global_rank - self.ep_size
         self.next_pp_rank = -1 if self.is_pp_last_stage else self.global_rank + self.ep_size
+
+        # TP ranks standalone and is responsible for only the experts
+        # self.tp_rank =
 
     def __repr__(self):
         return f"""ParallelDim(ep_group_rank={self.ep_group_ranks}\n

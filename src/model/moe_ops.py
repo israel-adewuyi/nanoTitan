@@ -177,3 +177,15 @@ class PermuteExpertAssignment(torch.autograd.Function):
         (dest_matrix,) = ctx.saved_tensors
         X_grad = nanotitan_cuda.permute_expert_assignment_kernel(out_grad.contiguous(), dest_matrix)
         return X_grad, None
+
+
+class TensorParallelExecution(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, cfg, X, weight, expert_offset) -> torch.Tensor:
+        ctx.save_for_backward()  # Idk yet
+        out = grouped_gemm_fn(X, weight, expert_offset)
+        dist.all_reduce(out, group=cfg.tp_group)
+
+    @staticmethod
+    def backward(ctx, out_grad) -> torch.Tensor:
+        pass

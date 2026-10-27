@@ -51,6 +51,7 @@ class RuntimeConfig(BaseModel):
     dp_size: int = 1
     pp_size: int = 1
     ep_size: int = 1
+    tp_size: int = 1
     num_expert: PositiveInt = 1
 
     @model_validator(mode="after")
