@@ -192,11 +192,11 @@ def test_model_active_parameter_count_uses_top_k_experts():
     model = NanoTitanModel(cfg, spec)
 
     attention_params = 4 * cfg.d_model * cfg.d_head * cfg.n_heads
-    layer_norm_params = 4 * cfg.d_model
+    norm_params = (2 if cfg.norm_type == "rmsnorm" else 4) * cfg.d_model
     router_params = cfg.d_model * cfg.num_experts
     expert_params = 3 * cfg.d_model * cfg.ffn_in
     expected_active_params = cfg.n_layers * (
-        attention_params + layer_norm_params + router_params + cfg.top_k * expert_params
+        attention_params + norm_params + router_params + cfg.top_k * expert_params
     )
 
     assert model.total_parameter_count() == sum(param.numel() for param in model.parameters())

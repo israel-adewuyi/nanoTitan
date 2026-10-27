@@ -20,6 +20,7 @@ checklist.md
 repo_tree.py
 repo-tree.txt
 src/runtime/
+configs/mac_dist.toml
 
 # Materialized benchmark datasets
 /data/*.pt
