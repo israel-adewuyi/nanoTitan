@@ -137,7 +137,7 @@ def main() -> None:
     seed_everything(cfg.trainer.seed)
 
     # divide ranks into their respective process groups, based on the parallelism config
-    dims = get_parallel_dims(cfg.runtime)
+    dims = get_parallel_dims(cfg)
     logger.debug(f"At rank {dims.global_rank}, {repr(dims)}")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
