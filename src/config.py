@@ -112,6 +112,8 @@ class ModelConfig(BaseModel):
     dtype: DTypeName = "float32"
     moe_router_dtype: DTypeName = "float32"
     router_alpha: float
+    # options : rmsnorm / layernorm
+    norm_type: str = "rmsnorm"
 
     @model_validator(mode="after")
     def validate_embedding_compatibility(self) -> ModelConfig:

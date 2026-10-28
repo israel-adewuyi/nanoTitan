@@ -105,6 +105,31 @@ class LayerNorm(nn.Module):
         return normalized_x * self.gamma + self.beta
 
 
+class RMSNorm(nn.Module):
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.d_model = cfg.d_model
+        self.weight = nn.Parameter(torch.ones(self.d_model, dtype=cfg.dtype))
+
+    def forward(
+        self, x: torch.Tensor[Float, "batch seq_len d_model"]
+    ) -> torch.Tensor[Float, "batch seq_len d_model"]:
+        x_mean_squared = x.square().mean(dim=-1, keepdim=True)
+        # consider using torch.rsqrt instead
+        x_rms = torch.sqrt(x_mean_squared + 1e-8)
+        normalized_x = x / x_rms
+        return normalized_x * self.weight
+
+
+def build_norm(cfg: ModelConfig) -> nn.Module:
+    if cfg.norm_type == "layernorm":
+        return LayerNorm(cfg=cfg)
+    elif cfg.norm_type == "rmsnorm":
+        return RMSNorm(cfg=cfg)
+    else:
+        raise ValueError(f"unknown norm_type: {cfg.norm_type}")
+
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -191,8 +216,8 @@ class TransformerLayer(nn.Module):
 
         self.attn = MultiHeadAttention(cfg)
         self.ffn = MoE(cfg, spec)
-        self.attn_norm = LayerNorm(cfg)
-        self.ffn_norm = LayerNorm(cfg)
+        self.attn_norm = build_norm(cfg)
+        self.ffn_norm = build_norm(cfg)
 
     def active_parameter_count(self) -> int:
         return (
