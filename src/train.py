@@ -12,7 +12,6 @@ from src.data.dataset import PackedTokenDataset
 from src.dist_env import cleanup, get_world_size, init_distributed
 from src.metrics import HistogramMetric, MetricsLogger, ScalarMetric
 from src.model.model import NanoTitanModel
-from src.model.utils import get_model_shard_specs
 from src.optim import setup_optimizer
 from src.parallel import (
     DataParallel,
@@ -142,15 +141,13 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    # allocate model layers to different ranks, including token, pos embed and umembed layer
-    spec = get_model_shard_specs(dims, cfg)
-    logger.debug(f"At rank {dims.global_rank}, spec is {spec}")
+    logger.debug(f"At rank {dims.global_rank}, the parallelism spec is {dims}")
 
     cfg.model.dtype = resolve_dtype(cfg.model.dtype)
     cfg.model.moe_router_dtype = resolve_dtype(cfg.model.moe_router_dtype)
 
     # Setup the model
-    model = NanoTitanModel.from_specs(cfg.model, spec)
+    model = NanoTitanModel.from_specs(cfg.model, dims)
     dp = DataParallel(cfg, dims)
     dp.prepare_model(model)
     pp = PipelineParallel(cfg, dims, dp.get_reducers())

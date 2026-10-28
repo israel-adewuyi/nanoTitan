@@ -62,9 +62,9 @@ class ParallelContext:
         """
         Each EP rank holds a subset of experts and we return the indices of the experts.
         """
-        self.num_per_rank_experts = self.config.model.num_experts // self.ep_size
-        self.start_expert_id = self.ep_rank * self.num_per_rank_experts
-        self.end_expert_id = self.start_expert_id + self.num_per_rank_experts
+        self.num_experts_per_rank = self.config.model.num_experts // self.ep_size
+        self.start_expert_id = self.ep_rank * self.num_experts_per_rank
+        self.end_expert_id = self.start_expert_id + self.num_experts_per_rank
 
     def _initialize_groups(self):
         """Create groups on every rank in the same order, retaining local memberships."""

@@ -7,14 +7,15 @@ from torch.profiler import record_function
 
 from src.config import ModelConfig
 from src.model.moe_ops import torch_backend_all_to_all
-from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
+from src.model.utils import MoELayerStats, topk_with_capacity
+from src.parallel_dims import ParallelContext
 
 logger = logging.getLogger(__name__)
 
 
 class TorchMoEBackend:
     def __init__(
-        self, cfg: ModelConfig, experts: nn.ModuleList, router: nn.Linear, spec: ModelShardSpec
+        self, cfg: ModelConfig, experts: nn.ModuleList, router: nn.Linear, spec: ParallelContext
     ):
         self.cfg = cfg
         self.spec = spec
@@ -74,7 +75,7 @@ class TorchMoEBackend:
             local_expert_offsets = expert_offsets
             permutation = None
         else:
-            send_matrix = tokens_per_expert.view(self.spec.ep_size, self.spec.per_rank_expert)
+            send_matrix = tokens_per_expert.view(self.spec.ep_size, self.spec.num_experts_per_rank)
             recv_matrix = torch.empty_like(send_matrix)
 
             dist.all_to_all_single(
@@ -95,7 +96,7 @@ class TorchMoEBackend:
             )
 
             src_offsets = torch.zeros(
-                (self.spec.ep_size, self.spec.per_rank_expert),
+                (self.spec.ep_size, self.spec.num_experts_per_rank),
                 dtype=torch.int32,
                 device=receiver_X.device,
             )
@@ -105,12 +106,12 @@ class TorchMoEBackend:
 
             prev = 0
             for src in range(self.spec.ep_size):
-                for expert in range(self.spec.per_rank_expert):
+                for expert in range(self.spec.num_experts_per_rank):
                     src_offsets[src][expert] = prev
                     prev += recv_matrix[src][expert]
 
             cur_idx = 0
-            for expert in range(self.spec.per_rank_expert):
+            for expert in range(self.spec.num_experts_per_rank):
                 for src in range(self.spec.ep_size):
                     count = recv_matrix[src][expert]
                     src_start = src_offsets[src][expert]
@@ -119,7 +120,7 @@ class TorchMoEBackend:
                     cur_idx += count
 
             local_expert_offsets = torch.empty(
-                self.spec.per_rank_expert + 1, dtype=torch.long, device=receiver_X.device
+                self.spec.num_experts_per_rank + 1, dtype=torch.long, device=receiver_X.device
             )
             local_expert_offsets[0] = 0
             local_expert_offsets[1:] = torch.cumsum(recv_matrix.sum(dim=0), dim=0)
