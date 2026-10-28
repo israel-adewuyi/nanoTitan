@@ -4,8 +4,9 @@ import torch
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
 from src.model.model import NanoTitanModel
-from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
+from src.model.utils import MoELayerStats, topk_with_capacity
 from src.utils import resolve_dtype
+from tests.helpers import make_single_rank_context
 
 
 def make_test_config(d_model=8, num_experts=4, top_k=2, moe_backend="torch"):
@@ -28,16 +29,12 @@ def make_test_config(d_model=8, num_experts=4, top_k=2, moe_backend="torch"):
 
 
 def make_test_spec(cfg, layer_end=None):
-    return ModelShardSpec(
-        layer_start=0,
-        layer_end=cfg.n_layers if layer_end is None else layer_end,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-        per_rank_expert=cfg.num_experts,
-        start_expert_id=0,
-        end_expert_id=cfg.num_experts,
-    )
+    spec = make_single_rank_context(cfg)
+    spec.end_layer_idx = cfg.n_layers if layer_end is None else layer_end
+    spec.has_token_embed = False
+    spec.has_pos_embed = False
+    spec.has_unembed_head = False
+    return spec
 
 
 def test_moe_output_shape():
@@ -205,16 +202,7 @@ def test_model_active_parameter_count_uses_top_k_experts():
 
 def test_parameter_sync_groups_handle_pipeline_boundary_blocks():
     cfg = make_test_config()
-    spec = ModelShardSpec(
-        layer_start=0,
-        layer_end=cfg.n_layers,
-        has_token_embed=True,
-        has_pos_embed=True,
-        has_unembed_head=True,
-        per_rank_expert=cfg.num_experts,
-        start_expert_id=0,
-        end_expert_id=cfg.num_experts,
-    )
+    spec = make_single_rank_context(cfg)
     model = NanoTitanModel(cfg, spec)
 
     groups = model.parameter_sync_groups()

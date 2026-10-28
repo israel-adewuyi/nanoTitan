@@ -1,5 +1,4 @@
 import os
-from dataclasses import replace
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -10,9 +9,9 @@ import torch.nn.functional as F
 
 from src.config import ModelConfig, RuntimeConfig
 from src.model.model import NanoTitanModel
-from src.model.utils import get_model_shard_specs
 from src.parallel import DataParallel, PipelineParallel
-from src.parallel_dims import ParallelDims
+from src.parallel_dims import ParallelContext
+from tests.helpers import make_single_rank_context
 
 pytestmark = [
     pytest.mark.distributed,
@@ -79,22 +78,14 @@ def _setup(device, dtype, *, dp_size=1, pp_size=1):
         model=model_cfg,
         runtime=RuntimeConfig(dp_size=dp_size, pp_size=pp_size, num_expert=4, bucket_size=1),
     )
-    dims = ParallelDims(cfg.runtime)
-    spec = get_model_shard_specs(dims, cfg)
-    reference_spec = replace(
-        spec,
-        layer_start=0,
-        layer_end=model_cfg.n_layers,
-        has_token_embed=True,
-        has_pos_embed=True,
-        has_unembed_head=True,
-    )
+    dims = ParallelContext(cfg)
+    reference_spec = make_single_rank_context(model_cfg)
 
     torch.manual_seed(2026)
     reference = NanoTitanModel(model_cfg, reference_spec).to(device)
-    model = NanoTitanModel(model_cfg, spec).to(device)
+    model = NanoTitanModel(model_cfg, dims).to(device)
     # The full model has an embedding block before its transformer layers.
-    start = spec.layer_start + int(not spec.has_token_embed)
+    start = dims.start_layer_idx + int(not dims.has_token_embed)
     reference_blocks = reference.blocks[start : start + len(model.blocks)]
     model.blocks.load_state_dict(reference_blocks.state_dict())
     return cfg, dims, reference, model, reference_blocks

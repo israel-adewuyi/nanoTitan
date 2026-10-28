@@ -1,13 +1,15 @@
 import os
+from types import SimpleNamespace
 
 import pytest
 import torch
 import torch.distributed as dist
 
-from src.config import ModelConfig
+from src.config import ModelConfig, RuntimeConfig
 from src.model.feed_fwd import MoE
-from src.model.utils import ModelShardSpec
+from src.parallel_dims import ParallelContext
 from src.utils import resolve_dtype
+from tests.helpers import make_single_rank_context
 
 WORLD_SIZE = 2
 NUM_EXPERTS = 4
@@ -36,41 +38,15 @@ def _make_config() -> ModelConfig:
     return cfg
 
 
-def _make_reference_spec() -> ModelShardSpec:
-    return ModelShardSpec(
-        layer_start=0,
-        layer_end=1,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-        per_rank_expert=NUM_EXPERTS,
-        start_expert_id=0,
-        end_expert_id=NUM_EXPERTS,
-    )
-
-
-def _make_sharded_spec(rank: int) -> ModelShardSpec:
-    start_expert_id = rank * EXPERTS_PER_RANK
-    return ModelShardSpec(
-        layer_start=0,
-        layer_end=1,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-        per_rank_expert=EXPERTS_PER_RANK,
-        start_expert_id=start_expert_id,
-        end_expert_id=start_expert_id + EXPERTS_PER_RANK,
-        ep_size=WORLD_SIZE,
-        ep_group=dist.group.WORLD,
-    )
-
-
 def _build_models(cfg: ModelConfig, rank: int, device: torch.device) -> tuple[MoE, MoE]:
     # Construct on CPU with the same seed on every rank so that each process has
     # an identical, full reference model.
     torch.manual_seed(2026)
-    reference = MoE(cfg, _make_reference_spec())
-    sharded = MoE(cfg, _make_sharded_spec(rank))
+    reference = MoE(cfg, make_single_rank_context(cfg))
+    sharded_context = ParallelContext(
+        SimpleNamespace(model=cfg, runtime=RuntimeConfig(ep_size=WORLD_SIZE))
+    )
+    sharded = MoE(cfg, sharded_context)
 
     start = rank * EXPERTS_PER_RANK
     end = start + EXPERTS_PER_RANK
