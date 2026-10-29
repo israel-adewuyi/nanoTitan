@@ -26,8 +26,8 @@ class DataConfig(BaseModel):
 class OptimizerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: str
-    lr: float
+    type: Literal["adam"]
+    lr: float = Field(ge=0, allow_inf_nan=False)
 
 
 class TokenEmbeddingConfig(BaseModel):
@@ -41,17 +41,17 @@ class PositionalEmbeddingConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # dp specific args
-    bucket_size: int = 25
+    bucket_size: PositiveInt = 25
 
     # PP specific args
-    num_microbatches: int = 1
+    num_microbatches: PositiveInt = 1
     pipeline_schedule: Literal["gpipe", "1f1b"] = "gpipe"
     activation_checkpointing: bool = False
 
-    dp_size: int = 1
-    pp_size: int = 1
-    ep_size: int = 1
-    tp_size: int = 1
+    dp_size: PositiveInt = 1
+    pp_size: PositiveInt = 1
+    ep_size: PositiveInt = 1
+    tp_size: Literal[1] = 1  # Tensor sharding is not implemented yet.
     num_expert: PositiveInt = 1
 
     @model_validator(mode="after")
@@ -108,19 +108,21 @@ class ModelConfig(BaseModel):
     positional_embedding: PositionalEmbeddingConfig = Field(
         default_factory=PositionalEmbeddingConfig
     )
-    moe_backend: str = "torch"
+    moe_backend: Literal["torch", "cuda"] = "torch"
     dtype: DTypeName = "float32"
-    moe_router_dtype: DTypeName = "float32"
+    moe_router_dtype: Literal["float32"] = "float32"
     router_alpha: float
     # options : rmsnorm / layernorm
-    norm_type: str = "rmsnorm"
+    norm_type: Literal["rmsnorm", "layernorm"] = "rmsnorm"
 
     @model_validator(mode="after")
-    def validate_embedding_compatibility(self) -> ModelConfig:
+    def validate_model_compatibility(self) -> ModelConfig:
         if self.d_model % 2 != 0:
             raise ValueError(
                 "model.d_model must be even when using sinusoidal positional embeddings"
             )
+        if self.top_k > self.num_experts:
+            raise ValueError("model.top_k must not exceed model.num_experts")
         return self
 
 
@@ -152,6 +154,18 @@ class AppConfig(BaseModel):
     hardware: HardwareConfig = Field(default_factory=HardwareConfig)
 
     track_backward_time: bool = False
+
+    @model_validator(mode="after")
+    def validate_parallelism(self) -> AppConfig:
+        if self.model.n_layers % self.runtime.pp_size != 0:
+            raise ValueError("model.n_layers must be divisible by runtime.pp_size")
+        if self.model.num_experts % self.runtime.ep_size != 0:
+            raise ValueError("model.num_experts must be divisible by runtime.ep_size")
+        if self.trainer.per_device_batch_size % self.runtime.num_microbatches != 0:
+            raise ValueError(
+                "trainer.per_device_batch_size must be divisible by runtime.num_microbatches"
+            )
+        return self
 
     @model_validator(mode="before")
     @classmethod

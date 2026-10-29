@@ -4,10 +4,12 @@ import argparse
 import logging
 import time
 from itertools import islice
+from types import SimpleNamespace
 
 import torch
 import torch.distributed as dist
 
+from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.dist_env import cleanup, get_world_size, init_distributed
 from src.metrics import HistogramMetric, MetricsLogger, ScalarMetric
@@ -100,6 +102,11 @@ def parse_args() -> argparse.Namespace:
         description="Load a NanoTitan TOML config and instantiate the model."
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate config and count parameters without allocating weights or running training.",
+    )
+    parser.add_argument(
         "--single_gpu",
         action="store_true",
         help="Reserved training mode flag. The model wiring is identical for now.",
@@ -117,12 +124,43 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def dry_run(cfg: AppConfig) -> None:
+    """Construct the full, unsharded model using only tensor metadata."""
+    model_cfg = cfg.model.model_copy()
+    model_cfg.dtype = resolve_dtype(model_cfg.dtype)
+    model_cfg.moe_router_dtype = resolve_dtype(model_cfg.moe_router_dtype)
+    # Construction needs layer/expert ownership, but no ranks or process groups.
+    spec = SimpleNamespace(
+        has_token_embed=True,
+        has_pos_embed=True,
+        has_unembed_head=True,
+        start_layer_idx=0,
+        end_layer_idx=model_cfg.n_layers,
+        num_experts_per_rank=model_cfg.num_experts,
+        ep_size=1,
+    )
+    with torch.device("meta"):
+        model = NanoTitanModel.from_specs(model_cfg, spec)
+    logger.info("Dry run: config validation and model construction passed")
+    logger.info(
+        "Full model parameters: %s total, %s active (top-k)",
+        f"{model.total_parameter_count():,}",
+        f"{int(model.active_parameter_count()):,}",
+    )
+    logger.info(
+        "Forward/backward, datasets, CUDA kernels and distributed execution were not checked"
+    )
+
+
 def main() -> None:
     args = parse_args()
     setup_logging(args.log_level)
 
     # get configs, run sanity checks for device mesh
     cfg = load_run_config(args.config)
+    if args.dry_run:
+        dry_run(cfg)
+        return
     init_distributed()
     world_size = get_world_size()
     assert (

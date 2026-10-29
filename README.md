@@ -104,6 +104,18 @@ uv run --no-sync torchrun --standalone --nnodes=1 --nproc-per-node=4 -m src.trai
 
 ## Testing
 
+### Config dry run (CPU)
+
+Validate a configuration and count the full model's total and active (top-k) parameters:
+
+```bash
+uv run --no-sync python -m src.train configs/big_sabaka.toml --dry-run
+```
+
+Use the CPU environment below if dependencies are not installed. This constructs the real model on PyTorch's `meta` device, which stores tensor metadata without allocating weights. It works with CUDA configs and distributed layouts on a CPU machine, and counts all layers and experts once, regardless of parallelism. No CUDA extension, dataset, or `torchrun` launch is needed.
+
+The check validates config values, routing settings, and layer/expert/microbatch divisibility. It does not execute forward/backward passes or verify datasets, CUDA kernels, distributed execution, or whether the model fits on your training hardware.
+
 ### CPU-compatible tests
 
 Install the CPU environment:

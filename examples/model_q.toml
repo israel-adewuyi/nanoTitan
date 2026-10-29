@@ -1,0 +1,42 @@
+run_name = "GPU=1_DP_BS=20"
+max_steps = 200
+
+[model]
+vocab_size = 50257
+d_model = 1024
+max_seq_len = 4096
+n_layers = 48
+d_head = 32
+n_heads = 32
+ffn_in = 4096
+num_experts = 64
+top_k = 4
+router_alpha = 0.01
+capacity_factor = 1.25
+norm_type = "rmsnorm"
+moe_backend = "cuda"
+dtype = "bfloat16"
+
+[trainer]
+seed = 42
+grad_norm = 2
+val_interval = -1
+num_val_batches = 10
+per_device_batch_size = 20
+
+[optim]
+type = "adam"
+lr = "5e-4"
+
+[data]
+dataset_name = "roneneldan/TinyStories"
+dataset_path = "data/tinystories_seq512.pt"
+
+[runtime]
+num_microbatches = 1
+pipeline_schedule = "gpipe"
+activation_checkpointing = false
+bucket_size = 64
+dp_size = 1
+pp_size = 1
+ep_size = 1

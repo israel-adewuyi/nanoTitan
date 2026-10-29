@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.config import DataConfig, RuntimeConfig, load_config
+from src.config import AppConfig, DataConfig, RuntimeConfig, load_config
 
 
 @pytest.mark.parametrize(
@@ -51,3 +51,34 @@ def test_multi_stage_pipeline_allows_multiple_microbatches():
 
     assert config.num_microbatches == 4
     assert config.activation_checkpointing is True
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"model": {"top_k": 17}}, "top_k must not exceed"),
+        ({"model": {"moe_backend": "typo"}}, "moe_backend"),
+        ({"model": {"norm_type": "typo"}}, "norm_type"),
+        ({"model": {"moe_router_dtype": "float16"}}, "moe_router_dtype"),
+        ({"runtime": {"dp_size": 0}}, "dp_size"),
+        ({"runtime": {"pp_size": 0}}, "pp_size"),
+        ({"runtime": {"ep_size": 0}}, "ep_size"),
+        ({"runtime": {"tp_size": 2}}, "tp_size"),
+        ({"runtime": {"num_microbatches": 0}}, "num_microbatches"),
+        ({"runtime": {"pp_size": 3}}, "n_layers must be divisible"),
+        ({"runtime": {"ep_size": 3}}, "num_experts must be divisible"),
+        (
+            {"runtime": {"pp_size": 2, "num_microbatches": 3}},
+            "per_device_batch_size must be divisible",
+        ),
+        ({"optim": {"type": "typo"}}, "type"),
+        ({"optim": {"lr": -0.01}}, "lr"),
+    ],
+)
+def test_invalid_training_configs_are_rejected(changes, message):
+    raw = load_config("configs/dist.toml").model_dump()
+    for section, fields in changes.items():
+        raw[section].update(fields)
+
+    with pytest.raises(ValidationError, match=message):
+        AppConfig.model_validate(raw)
