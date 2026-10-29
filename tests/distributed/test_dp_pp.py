@@ -1,5 +1,3 @@
-import os
-from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -24,30 +22,6 @@ TOLERANCES = {
     torch.float16: {"rtol": 1e-2, "atol": 1e-3},
     torch.bfloat16: {"rtol": 5e-2, "atol": 5e-3},
 }
-
-
-@pytest.fixture(scope="module")
-def two_ranks():
-    if int(os.environ.get("WORLD_SIZE", "1")) != 2:
-        pytest.skip("launch with torchrun --standalone --nproc-per-node=2")
-
-    owns_process_group = not dist.is_initialized()
-    if owns_process_group:
-        backend = "nccl" if torch.cuda.is_available() and dist.is_nccl_available() else "gloo"
-        if backend == "nccl":
-            torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
-        dist.init_process_group(backend=backend, timeout=timedelta(seconds=60))
-
-    try:
-        assert dist.get_world_size() == 2
-        device = torch.device("cpu")
-        if dist.get_backend() == "nccl":
-            device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
-            torch.cuda.set_device(device)
-        yield dist.get_rank(), device
-    finally:
-        if owns_process_group:
-            dist.destroy_process_group()
 
 
 def _setup(device, dtype, *, dp_size=1, pp_size=1):
