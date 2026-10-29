@@ -1,4 +1,4 @@
-run_name = "GPU=1_DP_BS=20"
+run_name = "model-q-seq4096-ep4"
 max_steps = 200
 
 [model]
@@ -22,7 +22,7 @@ seed = 42
 grad_norm = 2
 val_interval = -1
 num_val_batches = 10
-per_device_batch_size = 20
+per_device_batch_size = 1
 
 [optim]
 type = "adam"
@@ -30,7 +30,7 @@ lr = "5e-4"
 
 [data]
 dataset_name = "roneneldan/TinyStories"
-dataset_path = "data/tinystories_seq512.pt"
+dataset_path = "data/tinystories_seq4096.pt"
 
 [runtime]
 num_microbatches = 1
@@ -39,4 +39,4 @@ activation_checkpointing = false
 bucket_size = 64
 dp_size = 1
 pp_size = 1
-ep_size = 1
+ep_size = 4
