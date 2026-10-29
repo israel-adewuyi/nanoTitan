@@ -10,12 +10,13 @@ from src.model.moe_ops import (
     permute_expert_assignment_fn,
     torch_backend_all_to_all,
 )
-from src.model.utils import ModelShardSpec, MoELayerStats, topk_with_capacity
+from src.model.utils import MoELayerStats, topk_with_capacity
+from src.parallel_dims import ParallelContext
 
 
 class CUDAMoEBackend:
     def __init__(
-        self, cfg: ModelConfig, experts: nn.ModuleList, router: nn.Linear, spec: ModelShardSpec
+        self, cfg: ModelConfig, experts: nn.ModuleList, router: nn.Linear, spec: ParallelContext
     ):
         self.cfg = cfg
         self.spec = spec
@@ -68,7 +69,7 @@ class CUDAMoEBackend:
             expert_inputs = packed_X
             local_offsets = expert_offsets
         else:
-            send_matrix = expert_count.view(self.spec.ep_size, self.spec.per_rank_expert)
+            send_matrix = expert_count.view(self.spec.ep_size, self.spec.num_experts_per_rank)
             recv_matrix = torch.empty_like(send_matrix)
 
             dist.all_to_all_single(
@@ -84,7 +85,7 @@ class CUDAMoEBackend:
 
             local_counts = recv_matrix.sum(dim=0)
             local_offsets = torch.empty(
-                self.spec.per_rank_expert + 1, dtype=torch.int32, device=x.device
+                self.spec.num_experts_per_rank + 1, dtype=torch.int32, device=x.device
             )
             local_offsets[0] = 0
             local_offsets[1:] = torch.cumsum(local_counts, dim=0)

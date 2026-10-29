@@ -9,7 +9,8 @@ from jaxtyping import Float
 
 from src.config import ModelConfig
 from src.model.feed_fwd import MoE
-from src.model.utils import ModelShardSpec, MoELayerStats
+from src.model.utils import MoELayerStats
+from src.parallel_dims import ParallelContext
 
 
 def _parameter_count(module: nn.Module) -> int:
@@ -210,7 +211,7 @@ class MultiHeadAttention(nn.Module):
 class TransformerLayer(nn.Module):
     """A transformer layer"""
 
-    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
+    def __init__(self, cfg: ModelConfig, spec: ParallelContext):
         super().__init__()
         self.cfg = cfg
 
@@ -237,7 +238,7 @@ class TransformerLayer(nn.Module):
 
 
 class NanoTitanModel(nn.Module):
-    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
+    def __init__(self, cfg: ModelConfig, spec: ParallelContext):
         super().__init__()
         self.cfg = cfg
         self.spec = spec
@@ -246,14 +247,14 @@ class NanoTitanModel(nn.Module):
         if self.spec.has_token_embed and self.spec.has_pos_embed:
             self.blocks.append(EmbeddingBlock(cfg))
 
-        for _ in range(self.spec.layer_start, self.spec.layer_end):
+        for _ in range(self.spec.start_layer_idx, self.spec.end_layer_idx):
             self.blocks.append(TransformerLayer(cfg, spec))
 
         if self.spec.has_unembed_head:
             self.blocks.append(Unembed(self.cfg))
 
     @classmethod
-    def from_specs(cls, cfg: ModelConfig, spec: ModelShardSpec):
+    def from_specs(cls, cfg: ModelConfig, spec: ParallelContext):
         return cls(cfg, spec)
 
     def total_parameter_count(self) -> int:

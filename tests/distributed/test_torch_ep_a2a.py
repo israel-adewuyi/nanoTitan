@@ -1,13 +1,14 @@
-import os
+from types import SimpleNamespace
 
 import pytest
 import torch
 import torch.distributed as dist
 
-from src.config import ModelConfig
+from src.config import ModelConfig, RuntimeConfig
 from src.model.feed_fwd import MoE
-from src.model.utils import ModelShardSpec
+from src.parallel_dims import ParallelContext
 from src.utils import resolve_dtype
+from tests.helpers import make_single_rank_context
 
 WORLD_SIZE = 2
 NUM_EXPERTS = 4
@@ -36,41 +37,15 @@ def _make_config() -> ModelConfig:
     return cfg
 
 
-def _make_reference_spec() -> ModelShardSpec:
-    return ModelShardSpec(
-        layer_start=0,
-        layer_end=1,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-        per_rank_expert=NUM_EXPERTS,
-        start_expert_id=0,
-        end_expert_id=NUM_EXPERTS,
-    )
-
-
-def _make_sharded_spec(rank: int) -> ModelShardSpec:
-    start_expert_id = rank * EXPERTS_PER_RANK
-    return ModelShardSpec(
-        layer_start=0,
-        layer_end=1,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-        per_rank_expert=EXPERTS_PER_RANK,
-        start_expert_id=start_expert_id,
-        end_expert_id=start_expert_id + EXPERTS_PER_RANK,
-        ep_size=WORLD_SIZE,
-        ep_group=dist.group.WORLD,
-    )
-
-
 def _build_models(cfg: ModelConfig, rank: int, device: torch.device) -> tuple[MoE, MoE]:
     # Construct on CPU with the same seed on every rank so that each process has
     # an identical, full reference model.
     torch.manual_seed(2026)
-    reference = MoE(cfg, _make_reference_spec())
-    sharded = MoE(cfg, _make_sharded_spec(rank))
+    reference = MoE(cfg, make_single_rank_context(cfg))
+    sharded_context = ParallelContext(
+        SimpleNamespace(model=cfg, runtime=RuntimeConfig(ep_size=WORLD_SIZE))
+    )
+    sharded = MoE(cfg, sharded_context)
 
     start = rank * EXPERTS_PER_RANK
     end = start + EXPERTS_PER_RANK
@@ -109,97 +84,87 @@ def _make_global_input(device: torch.device) -> torch.Tensor:
 
 
 @pytest.mark.distributed
-def test_two_rank_torch_ep_matches_unsharded_reference():
-    if int(os.environ.get("WORLD_SIZE", "1")) != WORLD_SIZE:
-        pytest.skip("launch with torchrun --standalone --nproc-per-node=2")
+def test_two_rank_torch_ep_matches_unsharded_reference(two_ranks):
+    rank, device = two_ranks
 
-    owns_process_group = not dist.is_initialized()
-    if owns_process_group:
-        use_nccl = torch.cuda.is_available() and dist.is_nccl_available()
-        backend = "nccl" if use_nccl else "gloo"
-        if use_nccl:
-            torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
-        dist.init_process_group(backend=backend, init_method="env://")
+    cfg = _make_config()
+    print(f"[rank {rank}] before _build_models", flush=True)
+    reference, sharded = _build_models(cfg, rank, device)
+    print(f"[rank {rank}] after _build_models", flush=True)
 
-    rank = dist.get_rank()
-    if dist.get_world_size() != WORLD_SIZE:
-        pytest.fail(f"expected {WORLD_SIZE} ranks, got {dist.get_world_size()}")
+    reference_input = _make_global_input(device).requires_grad_(True)
+    local_start = rank * LOCAL_BATCH_SIZE
+    local_end = local_start + LOCAL_BATCH_SIZE
+    sharded_input = reference_input.detach()[local_start:local_end].clone().requires_grad_(True)
 
-    if dist.get_backend() == "nccl":
-        local_rank = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(local_rank)
-        device = torch.device("cuda", local_rank)
-    else:
-        device = torch.device("cpu")
+    print(f"[rank {rank}] before reference(...) (forward)", flush=True)
+    reference_output, reference_stats = reference(reference_input)
+    print(f"[rank {rank}] after reference(...) (forward)", flush=True)
+    print(f"[rank {rank}] before sharded(...) (forward)", flush=True)
+    sharded_output, local_stats = sharded(sharded_input)
+    print(f"[rank {rank}] after sharded(...) (forward)", flush=True)
 
-    try:
-        cfg = _make_config()
-        reference, sharded = _build_models(cfg, rank, device)
+    # These balanced inputs avoid capacity rerouting, so the raw routing
+    # counts in the stats also describe the dispatched expert assignments.
+    reference_counts = reference_stats.tokens_per_expert
+    local_counts = local_stats.tokens_per_expert
 
-        reference_input = _make_global_input(device).requires_grad_(True)
-        local_start = rank * LOCAL_BATCH_SIZE
-        local_end = local_start + LOCAL_BATCH_SIZE
-        sharded_input = reference_input.detach()[local_start:local_end].clone().requires_grad_(True)
+    output_gradient = torch.linspace(
+        -1.0,
+        1.0,
+        steps=reference_output.numel(),
+        device=device,
+        dtype=reference_output.dtype,
+    ).reshape_as(reference_output)
 
-        reference_output, reference_stats = reference(reference_input)
-        sharded_output, local_stats = sharded(sharded_input)
+    print(f"[rank {rank}] before reference_output.backward(...)", flush=True)
+    reference_output.backward(output_gradient)
+    print(f"[rank {rank}] after reference_output.backward(...)", flush=True)
+    print(f"[rank {rank}] before sharded_output.backward(...)", flush=True)
+    sharded_output.backward(output_gradient[local_start:local_end].contiguous())
+    print(f"[rank {rank}] after sharded_output.backward(...)", flush=True)
 
-        # These balanced inputs avoid capacity rerouting, so the raw routing
-        # counts in the stats also describe the dispatched expert assignments.
-        reference_counts = reference_stats.tokens_per_expert
-        local_counts = local_stats.tokens_per_expert
+    global_counts = local_counts.clone()
+    print(f"[rank {rank}] before all_reduce #1 (global_counts)", flush=True)
+    dist.all_reduce(global_counts, group=dist.group.WORLD)
+    print(f"[rank {rank}] after all_reduce #1 (global_counts)", flush=True)
 
-        output_gradient = torch.linspace(
-            -1.0,
-            1.0,
-            steps=reference_output.numel(),
-            device=device,
-            dtype=reference_output.dtype,
-        ).reshape_as(reference_output)
+    global_router_gradient = sharded.router.weight.grad.clone()
+    print(f"[rank {rank}] before all_reduce #2 (global_router_gradient)", flush=True)
+    dist.all_reduce(global_router_gradient, group=dist.group.WORLD)
+    print(f"[rank {rank}] after all_reduce #2 (global_router_gradient)", flush=True)
 
-        reference_output.backward(output_gradient)
-        sharded_output.backward(output_gradient[local_start:local_end].contiguous())
+    expected_output = reference_output.detach()[local_start:local_end]
+    expected_input_gradient = reference_input.grad[local_start:local_end]
+    start_expert = rank * EXPERTS_PER_RANK
+    end_expert = start_expert + EXPERTS_PER_RANK
 
-        global_counts = local_counts.clone()
-        dist.all_reduce(global_counts, group=dist.group.WORLD)
+    torch.testing.assert_close(sharded_output, expected_output, rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(
+        sharded_input.grad,
+        expected_input_gradient,
+        rtol=1e-5,
+        atol=1e-6,
+    )
+    torch.testing.assert_close(global_counts, reference_counts)
+    torch.testing.assert_close(
+        global_router_gradient,
+        reference.router.weight.grad,
+        rtol=1e-5,
+        atol=1e-6,
+    )
 
-        global_router_gradient = sharded.router.weight.grad.clone()
-        dist.all_reduce(global_router_gradient, group=dist.group.WORLD)
-
-        expected_output = reference_output.detach()[local_start:local_end]
-        expected_input_gradient = reference_input.grad[local_start:local_end]
-        start_expert = rank * EXPERTS_PER_RANK
-        end_expert = start_expert + EXPERTS_PER_RANK
-
-        torch.testing.assert_close(sharded_output, expected_output, rtol=1e-5, atol=1e-6)
+    for name in ("W_gate", "W_val", "W_out"):
+        sharded_gradient = getattr(sharded.experts, name).grad
+        reference_gradient = getattr(reference.experts, name).grad[start_expert:end_expert]
         torch.testing.assert_close(
-            sharded_input.grad,
-            expected_input_gradient,
+            sharded_gradient,
+            reference_gradient,
             rtol=1e-5,
             atol=1e-6,
         )
-        torch.testing.assert_close(global_counts, reference_counts)
-        torch.testing.assert_close(
-            global_router_gradient,
-            reference.router.weight.grad,
-            rtol=1e-5,
-            atol=1e-6,
-        )
 
-        for name in ("W_gate", "W_val", "W_out"):
-            sharded_gradient = getattr(sharded.experts, name).grad
-            reference_gradient = getattr(reference.experts, name).grad[start_expert:end_expert]
-            torch.testing.assert_close(
-                sharded_gradient,
-                reference_gradient,
-                rtol=1e-5,
-                atol=1e-6,
-            )
-
-        assignments_per_destination = local_counts.view(WORLD_SIZE, EXPERTS_PER_RANK).sum(dim=1)
-        assert torch.all(assignments_per_destination > 0), (
-            "each source rank must send assignments to both expert ranks"
-        )
-    finally:
-        if owns_process_group:
-            dist.destroy_process_group()
+    assignments_per_destination = local_counts.view(WORLD_SIZE, EXPERTS_PER_RANK).sum(dim=1)
+    assert torch.all(assignments_per_destination > 0), (
+        "each source rank must send assignments to both expert ranks"
+    )

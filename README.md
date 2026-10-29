@@ -60,11 +60,13 @@ Clone repo
 git clone https://github.com/israel-adewuyi/nanoTitan.git && cd nanoTitan
 ```
 
-Install CUDA Toolkit, CUDA environment and build the CUDA extension
+On your NVIDIA GPU machine, with a CUDA 13 development toolkit (`nvcc`) and a C++ compiler installed, install the GPU environment and build the CUDA extension:
 
+```bash
+uv sync --python 3.11 --locked --extra gpu
 ```
-uv sync --python 3.11 --locked --extra cu128
-```
+
+CUDA 13 is the default NVIDIA target: `gpu` selects PyTorch 2.13.0's CUDA 13.0 build (`cu130`) and uses the machine's installed toolkit to compile the extension. Select one accelerator extra per environment: `gpu`, `cpu`, or `rocm`. After installation, use `uv run --no-sync` to preserve the selected environment when running training or tests.
 
 With the ROCm toolkit installed and `hipcc` on `PATH`, install the ROCm environment and build the extension:
 
@@ -94,10 +96,10 @@ dataset_path = "data/tinystories_seq768.pt"
 
 The cached sequence length must match `model.max_seq_len`.
 
-Launch a distributed trainig job on 4 GPUs
+Launch a distributed training job on 4 GPUs:
 
-```
-uv run torchrun --standalone --nnodes=1 --nproc-per-node=4 -m src.train big_sabaka.toml
+```bash
+uv run --no-sync torchrun --standalone --nnodes=1 --nproc-per-node=4 -m src.train configs/big_sabaka.toml
 ```
 
 ## Testing

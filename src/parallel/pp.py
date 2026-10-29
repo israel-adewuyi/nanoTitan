@@ -14,7 +14,7 @@ from src.model.model import NanoTitanModel
 from src.model.utils import max_violation
 from src.parallel.pp_schedules import get_pipeline_schedule
 from src.parallel.pp_schedules.comms import PipelineComms
-from src.parallel_dims import ParallelDims
+from src.parallel_dims import ParallelContext
 from src.utils import clip_gradients, compute_grad_norm
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class MicrobatchState:
 
 
 class PipelineParallel:
-    def __init__(self, cfg: AppConfig, dim: ParallelDims, reducers: dict):
+    def __init__(self, cfg: AppConfig, dim: ParallelContext, reducers: dict):
         self.cfg = cfg
         self.dim = dim
         self.device = f"cuda:{dim.local_rank}"
@@ -229,7 +229,7 @@ class PipelineParallel:
             max_vio_sum = max_violation(layer_counts).sum().item()
             for local_layer_idx, counts in enumerate(layer_counts.float()):
                 frac = counts / counts.sum().clamp_min(1.0)
-                global_layer_idx = model.spec.layer_start + local_layer_idx
+                global_layer_idx = model.spec.start_layer_idx + local_layer_idx
                 local_layer_fracs[global_layer_idx] = frac.detach().cpu()
 
         # World SUM combines PP stages; DP/EP ranks hold duplicate pooled counts.

@@ -1,9 +1,8 @@
-from types import SimpleNamespace
-
 import pytest
 import torch
 
-from src.model.utils import ModelShardSpec
+from src.config import ModelConfig
+from tests.helpers import make_single_rank_context
 
 pytestmark = pytest.mark.cuda
 
@@ -14,7 +13,7 @@ nanotitan_cuda = pytest.importorskip("nanotitan_cuda")
 feed_fwd = pytest.importorskip("src.model.feed_fwd")
 moe_ops = pytest.importorskip("src.model.moe_ops")
 
-ExpertFFN = feed_fwd.ExpertFFN
+ExpertsFFN = feed_fwd.ExpertsFFN
 grouped_gemm_fn = moe_ops.grouped_gemm_fn
 
 SUPPORTED_DTYPES = [
@@ -23,7 +22,7 @@ SUPPORTED_DTYPES = [
     pytest.param(torch.bfloat16, id="bfloat16"),
 ]
 
-# ExpertFFN stores its projection matrices as:
+# ExpertsFFN stores its projection matrices as:
 #   W_gate/W_val: [num_experts, d_model, ffn_in]
 #   W_out:        [num_experts, ffn_in, d_model]
 # These dimensions match the smaller CUDA model config in configs/dist.toml.
@@ -211,28 +210,26 @@ def test_grouped_gemm_autograd_wrapper_matches_torch(dtype, input_features, outp
 @pytest.mark.parametrize("dtype", SUPPORTED_DTYPES)
 def test_expert_ffn_cuda_matches_torch_forward_and_backward(dtype):
     torch.manual_seed(0)
-    cfg_torch = SimpleNamespace(
+    cfg_torch = ModelConfig(
         num_experts=3,
         d_model=8,
         ffn_in=16,
-        dtype=dtype,
+        vocab_size=1,
+        d_head=1,
+        n_heads=1,
+        n_layers=1,
+        max_seq_len=1,
+        top_k=2,
+        router_alpha=0.01,
         moe_backend="torch",
     )
-    cfg_cuda = SimpleNamespace(**vars(cfg_torch))
+    cfg_torch.dtype = dtype
+    cfg_cuda = cfg_torch.model_copy()
     cfg_cuda.moe_backend = "cuda"
-    spec = ModelShardSpec(
-        layer_start=0,
-        layer_end=1,
-        has_token_embed=False,
-        has_pos_embed=False,
-        has_unembed_head=False,
-        per_rank_expert=cfg_torch.num_experts,
-        start_expert_id=0,
-        end_expert_id=cfg_torch.num_experts,
-    )
+    spec = make_single_rank_context(cfg_torch)
 
-    expert_ref = ExpertFFN(cfg_torch, spec).to("cuda")
-    expert_cuda = ExpertFFN(cfg_cuda, spec).to("cuda")
+    expert_ref = ExpertsFFN(cfg_torch, spec).to("cuda")
+    expert_cuda = ExpertsFFN(cfg_cuda, spec).to("cuda")
     expert_cuda.load_state_dict(expert_ref.state_dict())
 
     offsets = torch.tensor([0, 3, 4, 8], dtype=torch.int32, device="cuda")

@@ -6,7 +6,7 @@ from src.config import ModelConfig
 from src.model.cuda_backend import CUDAMoEBackend
 from src.model.moe_ops import grouped_gemm_fn
 from src.model.torch_backend import TorchMoEBackend
-from src.model.utils import ModelShardSpec
+from src.parallel_dims import ParallelContext
 
 
 class FFN(nn.Module):
@@ -39,7 +39,7 @@ class FFN(nn.Module):
 class ExpertsFFN(nn.Module):
     """Experts block implementation"""
 
-    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
+    def __init__(self, cfg: ModelConfig, spec: ParallelContext):
         super().__init__()
         self.cfg = cfg
         self.spec = spec
@@ -47,7 +47,7 @@ class ExpertsFFN(nn.Module):
         # SwiGLU uses two parallel input projections
         self.W_gate = nn.Parameter(
             torch.empty(
-                spec.per_rank_expert,
+                spec.num_experts_per_rank,
                 cfg.d_model,
                 cfg.ffn_in,
                 dtype=cfg.dtype,
@@ -55,7 +55,7 @@ class ExpertsFFN(nn.Module):
         )
         self.W_val = nn.Parameter(
             torch.empty(
-                spec.per_rank_expert,
+                spec.num_experts_per_rank,
                 cfg.d_model,
                 cfg.ffn_in,
                 dtype=cfg.dtype,
@@ -63,7 +63,7 @@ class ExpertsFFN(nn.Module):
         )
         self.W_out = nn.Parameter(
             torch.empty(
-                spec.per_rank_expert,
+                spec.num_experts_per_rank,
                 cfg.ffn_in,
                 cfg.d_model,
                 dtype=cfg.dtype,
@@ -84,7 +84,7 @@ class ExpertsFFN(nn.Module):
     ):
         out = torch.empty_like(packed_X)
 
-        for e in range(self.spec.per_rank_expert):
+        for e in range(self.spec.num_experts_per_rank):
             start = expert_offset[e].item()
             end = expert_offset[e + 1].item()
 
@@ -128,11 +128,11 @@ class MoE(nn.Module):
     A Mixture of Experts layer
     """
 
-    def __init__(self, cfg: ModelConfig, spec: ModelShardSpec):
+    def __init__(self, cfg: ModelConfig, spec: ParallelContext):
         super().__init__()
         self.cfg = cfg
         self.spec = spec
-        self.experts = ExpertFFN(cfg, spec)
+        self.experts = ExpertsFFN(cfg, spec)
         self.router = nn.Linear(
             self.cfg.d_model, self.cfg.num_experts, bias=False, dtype=cfg.moe_router_dtype
         )

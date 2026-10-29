@@ -11,7 +11,7 @@ from torch.nn.utils import clip_grads_with_norm_, get_total_norm
 from src.config import AppConfig, TrainerConfig, load_config
 from src.metrics import MetricsLogger
 from src.model.model import NanoTitanModel
-from src.parallel_dims import ParallelDims
+from src.parallel_dims import ParallelContext
 
 SUCCESS = 25
 logging.addLevelName(SUCCESS, "SUCCESS")
@@ -97,7 +97,7 @@ def get_profiler_trace_dir() -> Path | None:
     return self.log_dir / "profiler"
 
 
-def compute_grad_norm(model: NanoTitanModel, dims: ParallelDims) -> torch.Tensor:
+def compute_grad_norm(model: NanoTitanModel, dims: ParallelContext) -> torch.Tensor:
     expert_params, nonexpert_params = [], []
     expert_param_name_slug = ["W_gate", "W_val", "W_out"]
 

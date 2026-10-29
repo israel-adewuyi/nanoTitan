@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from src.config import AppConfig
 from src.data.dataset import PackedTokenDataset
 from src.parallel.reducer import ReducerV1
-from src.parallel_dims import ParallelDims
+from src.parallel_dims import ParallelContext
 
 
 class DataParallel:
@@ -17,7 +17,7 @@ class DataParallel:
     computed for all the params.
     """
 
-    def __init__(self, cfg: AppConfig, dims: ParallelDims):
+    def __init__(self, cfg: AppConfig, dims: ParallelContext):
         self.cfg = cfg
         self.dims = dims
         self.device = f"cuda:{dims.local_rank}"

@@ -1,6 +1,3 @@
-import os
-from dataclasses import replace
-from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -10,9 +7,9 @@ import torch.nn.functional as F
 
 from src.config import ModelConfig, RuntimeConfig
 from src.model.model import NanoTitanModel
-from src.model.utils import get_model_shard_specs
 from src.parallel import DataParallel, PipelineParallel
-from src.parallel_dims import ParallelDims
+from src.parallel_dims import ParallelContext
+from tests.helpers import make_single_rank_context
 
 pytestmark = [
     pytest.mark.distributed,
@@ -25,30 +22,6 @@ TOLERANCES = {
     torch.float16: {"rtol": 1e-2, "atol": 1e-3},
     torch.bfloat16: {"rtol": 5e-2, "atol": 5e-3},
 }
-
-
-@pytest.fixture(scope="module")
-def two_ranks():
-    if int(os.environ.get("WORLD_SIZE", "1")) != 2:
-        pytest.skip("launch with torchrun --standalone --nproc-per-node=2")
-
-    owns_process_group = not dist.is_initialized()
-    if owns_process_group:
-        backend = "nccl" if torch.cuda.is_available() and dist.is_nccl_available() else "gloo"
-        if backend == "nccl":
-            torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
-        dist.init_process_group(backend=backend, timeout=timedelta(seconds=60))
-
-    try:
-        assert dist.get_world_size() == 2
-        device = torch.device("cpu")
-        if dist.get_backend() == "nccl":
-            device = torch.device("cuda", int(os.environ["LOCAL_RANK"]))
-            torch.cuda.set_device(device)
-        yield dist.get_rank(), device
-    finally:
-        if owns_process_group:
-            dist.destroy_process_group()
 
 
 def _setup(device, dtype, *, dp_size=1, pp_size=1):
@@ -79,22 +52,14 @@ def _setup(device, dtype, *, dp_size=1, pp_size=1):
         model=model_cfg,
         runtime=RuntimeConfig(dp_size=dp_size, pp_size=pp_size, num_expert=4, bucket_size=1),
     )
-    dims = ParallelDims(cfg.runtime)
-    spec = get_model_shard_specs(dims, cfg)
-    reference_spec = replace(
-        spec,
-        layer_start=0,
-        layer_end=model_cfg.n_layers,
-        has_token_embed=True,
-        has_pos_embed=True,
-        has_unembed_head=True,
-    )
+    dims = ParallelContext(cfg)
+    reference_spec = make_single_rank_context(model_cfg)
 
     torch.manual_seed(2026)
     reference = NanoTitanModel(model_cfg, reference_spec).to(device)
-    model = NanoTitanModel(model_cfg, spec).to(device)
+    model = NanoTitanModel(model_cfg, dims).to(device)
     # The full model has an embedding block before its transformer layers.
-    start = spec.layer_start + int(not spec.has_token_embed)
+    start = dims.start_layer_idx + int(not dims.has_token_embed)
     reference_blocks = reference.blocks[start : start + len(model.blocks)]
     model.blocks.load_state_dict(reference_blocks.state_dict())
     return cfg, dims, reference, model, reference_blocks
