@@ -110,15 +110,21 @@ def test_two_rank_torch_ep_matches_unsharded_reference():
 
     try:
         cfg = _make_config()
+        print(f"[rank {rank}] before _build_models", flush=True)
         reference, sharded = _build_models(cfg, rank, device)
+        print(f"[rank {rank}] after _build_models", flush=True)
 
         reference_input = _make_global_input(device).requires_grad_(True)
         local_start = rank * LOCAL_BATCH_SIZE
         local_end = local_start + LOCAL_BATCH_SIZE
         sharded_input = reference_input.detach()[local_start:local_end].clone().requires_grad_(True)
 
+        print(f"[rank {rank}] before reference(...) (forward)", flush=True)
         reference_output, reference_stats = reference(reference_input)
+        print(f"[rank {rank}] after reference(...) (forward)", flush=True)
+        print(f"[rank {rank}] before sharded(...) (forward)", flush=True)
         sharded_output, local_stats = sharded(sharded_input)
+        print(f"[rank {rank}] after sharded(...) (forward)", flush=True)
 
         # These balanced inputs avoid capacity rerouting, so the raw routing
         # counts in the stats also describe the dispatched expert assignments.
@@ -133,14 +139,22 @@ def test_two_rank_torch_ep_matches_unsharded_reference():
             dtype=reference_output.dtype,
         ).reshape_as(reference_output)
 
+        print(f"[rank {rank}] before reference_output.backward(...)", flush=True)
         reference_output.backward(output_gradient)
+        print(f"[rank {rank}] after reference_output.backward(...)", flush=True)
+        print(f"[rank {rank}] before sharded_output.backward(...)", flush=True)
         sharded_output.backward(output_gradient[local_start:local_end].contiguous())
+        print(f"[rank {rank}] after sharded_output.backward(...)", flush=True)
 
         global_counts = local_counts.clone()
+        print(f"[rank {rank}] before all_reduce #1 (global_counts)", flush=True)
         dist.all_reduce(global_counts, group=dist.group.WORLD)
+        print(f"[rank {rank}] after all_reduce #1 (global_counts)", flush=True)
 
         global_router_gradient = sharded.router.weight.grad.clone()
+        print(f"[rank {rank}] before all_reduce #2 (global_router_gradient)", flush=True)
         dist.all_reduce(global_router_gradient, group=dist.group.WORLD)
+        print(f"[rank {rank}] after all_reduce #2 (global_router_gradient)", flush=True)
 
         expected_output = reference_output.detach()[local_start:local_end]
         expected_input_gradient = reference_input.grad[local_start:local_end]
