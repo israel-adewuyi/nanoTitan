@@ -110,8 +110,8 @@ def compute_grad_norm(model: NanoTitanModel, dims: ParallelContext) -> torch.Ten
         else:
             nonexpert_params.append(param.grad)
 
-    ep_squared_norm = get_total_norm(expert_params) ** 2
-    nonep_squared_norm = get_total_norm(nonexpert_params) ** 2
+    ep_squared_norm = squared_gradient_norm(expert_params)
+    nonep_squared_norm = squared_gradient_norm(nonexpert_params)
 
     dist.all_reduce(ep_squared_norm, op=dist.ReduceOp.SUM, group=dims.ep_group)
     dist.all_reduce(ep_squared_norm, op=dist.ReduceOp.SUM, group=dims.pp_group)
@@ -120,6 +120,10 @@ def compute_grad_norm(model: NanoTitanModel, dims: ParallelContext) -> torch.Ten
     global_norm = torch.sqrt(ep_squared_norm + nonep_squared_norm)
     assert isinstance(global_norm, torch.Tensor)
     return global_norm
+
+
+def squared_gradient_norm(gradients: list[torch.Tensor]) -> torch.Tensor:
+    return get_total_norm([gradient.float() for gradient in gradients]) ** 2
 
 
 def clip_gradients(model: NanoTitanModel, grad_norm: torch.Tensor, cfg: TrainerConfig):

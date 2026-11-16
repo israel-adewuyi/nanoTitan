@@ -100,10 +100,11 @@ class LayerNorm(nn.Module):
     def forward(
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
     ) -> torch.Tensor[Float, "batch seq_len d_model"]:
-        x_mean = x.mean(dim=-1, keepdim=True)
-        x_var = x.var(dim=-1, keepdim=True, correction=0)
-        normalized_x = (x - x_mean) / torch.sqrt(x_var + 1e-8)
-        return normalized_x * self.gamma + self.beta
+        value = x.float()
+        x_mean = value.mean(dim=-1, keepdim=True)
+        x_var = value.var(dim=-1, keepdim=True, correction=0)
+        normalized_x = (value - x_mean) / torch.sqrt(x_var + 1e-8)
+        return (normalized_x * self.gamma.float() + self.beta.float()).to(x.dtype)
 
 
 class RMSNorm(nn.Module):
@@ -115,11 +116,12 @@ class RMSNorm(nn.Module):
     def forward(
         self, x: torch.Tensor[Float, "batch seq_len d_model"]
     ) -> torch.Tensor[Float, "batch seq_len d_model"]:
-        x_mean_squared = x.square().mean(dim=-1, keepdim=True)
+        value = x.float()
+        x_mean_squared = value.square().mean(dim=-1, keepdim=True)
         # consider using torch.rsqrt instead
         x_rms = torch.sqrt(x_mean_squared + 1e-8)
-        normalized_x = x / x_rms
-        return normalized_x * self.weight
+        normalized_x = value / x_rms
+        return (normalized_x * self.weight.float()).to(x.dtype)
 
 
 def build_norm(cfg: ModelConfig) -> nn.Module:
